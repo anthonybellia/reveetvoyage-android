@@ -166,12 +166,18 @@ data class Message(
     val id: Int,
     val sender: String,
     val body: String,
+    val attachment_url: String? = null,
+    val attachment_type: String? = null,   // "image" | "pdf" | "other"
+    val attachment_name: String? = null,
+    val attachment_size: Int? = null,
+    val attachment_mime: String? = null,
     val read_at: String? = null,
     val is_read: Boolean = false,
     val created_at: String,
 ) {
     val isFromUser: Boolean get() = sender == "user"
     val isFromAdmin: Boolean get() = sender == "admin"
+    val hasAttachment: Boolean get() = !attachment_url.isNullOrBlank()
 }
 
 @Serializable

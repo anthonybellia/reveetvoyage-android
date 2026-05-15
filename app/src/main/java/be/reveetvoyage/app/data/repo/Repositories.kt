@@ -36,10 +36,27 @@ class PassengerRepository @Inject constructor(private val api: ApiService) {
 }
 
 @Singleton
-class MessageRepository @Inject constructor(private val api: ApiService) {
+class MessageRepository @Inject constructor(
+    private val api: ApiService,
+    @ApplicationContext private val context: Context,
+) {
     suspend fun list(since: String? = null) = api.messages(since).data
     suspend fun send(body: String) = api.sendMessage(SendMessageRequest(body)).data
     suspend fun unreadCount() = api.unreadCount().count
+    suspend fun files() = api.files().data
+
+    suspend fun sendWithAttachment(body: String, bytes: ByteArray, fileName: String, mime: String): Message {
+        val tmpFile = File.createTempFile("attach_", "_${System.currentTimeMillis()}", context.cacheDir).apply {
+            FileOutputStream(this).use { it.write(bytes) }
+        }
+        val mimeType = mime.toMediaTypeOrNull()
+        val fileBody = tmpFile.asRequestBody(mimeType)
+        val part = MultipartBody.Part.createFormData("attachment", fileName, fileBody)
+        val bodyRb = okhttp3.RequestBody.create("text/plain".toMediaTypeOrNull(), body)
+        val response = api.sendMessageWithAttachment(bodyRb, part).data
+        tmpFile.delete()
+        return response
+    }
 }
 
 @Singleton

@@ -138,7 +138,14 @@ fun MainScreen(onLogout: () -> Unit) {
             ) { entry ->
                 val raw = entry.arguments?.getString("draft")
                 val decoded = raw?.let { java.net.URLDecoder.decode(it, "UTF-8") }
-                MessagesScreen(onBack = { navController.popBackStack() }, initialDraft = decoded)
+                MessagesScreen(
+                    onBack = { navController.popBackStack() },
+                    initialDraft = decoded,
+                    onOpenFiles = { navController.navigate("files") },
+                )
+            }
+            composable("files") {
+                FilesScreen(onBack = { navController.popBackStack() })
             }
             composable("page/{slug}/{title}") { entry ->
                 val slug = entry.arguments?.getString("slug") ?: ""

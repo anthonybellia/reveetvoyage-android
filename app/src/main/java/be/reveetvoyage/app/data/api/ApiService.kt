@@ -76,8 +76,18 @@ interface ApiService {
     @POST("messages")
     suspend fun sendMessage(@Body req: SendMessageRequest): WrappedResponse<Message>
 
+    @Multipart
+    @POST("messages")
+    suspend fun sendMessageWithAttachment(
+        @Part("body") body: okhttp3.RequestBody,
+        @Part attachment: MultipartBody.Part,
+    ): WrappedResponse<Message>
+
     @GET("messages/unread-count")
     suspend fun unreadCount(): UnreadCountResponse
+
+    @GET("files")
+    suspend fun files(): PaginatedResponse<Message>
 
     // Pages dynamiques (CGU, confidentialité, etc.) — public
     @GET("pages/{slug}")

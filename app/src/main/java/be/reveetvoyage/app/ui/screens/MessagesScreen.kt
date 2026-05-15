@@ -1,15 +1,31 @@
 package be.reveetvoyage.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.FileOpen
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -84,6 +100,19 @@ class MessagesViewModel @Inject constructor(private val repo: MessageRepository)
         }
     }
 
+    fun sendAttachment(bytes: ByteArray, fileName: String, mime: String) {
+        viewModelScope.launch {
+            _isSending.value = true
+            val body = _draft.value.trim()
+            val snapshot = _draft.value
+            _draft.value = ""
+            runCatching { repo.sendWithAttachment(body, bytes, fileName, mime) }
+                .onSuccess { _messages.value = _messages.value + it }
+                .onFailure { _draft.value = snapshot }
+            _isSending.value = false
+        }
+    }
+
     override fun onCleared() {
         stop(); super.onCleared()
     }
@@ -94,12 +123,31 @@ class MessagesViewModel @Inject constructor(private val repo: MessageRepository)
 fun MessagesScreen(
     onBack: () -> Unit,
     initialDraft: String? = null,
+    onOpenFiles: () -> Unit = {},
     vm: MessagesViewModel = hiltViewModel(),
 ) {
     val messages by vm.messages.collectAsState()
     val draft by vm.draft.collectAsState()
     val isSending by vm.isSending.collectAsState()
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            val name = uri.lastPathSegment ?: "photo.jpg"
+            val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+            if (bytes != null) vm.sendAttachment(bytes, name, mime)
+        }
+    }
+    val docPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            val name = uri.lastPathSegment?.substringAfterLast('/') ?: "document.pdf"
+            val mime = context.contentResolver.getType(uri) ?: "application/pdf"
+            if (bytes != null) vm.sendAttachment(bytes, name, mime)
+        }
+    }
 
     LaunchedEffect(initialDraft) {
         if (!initialDraft.isNullOrEmpty() && draft.isEmpty()) {
@@ -119,6 +167,11 @@ fun MessagesScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onOpenFiles) {
+                        Icon(Icons.Default.Folder, null, tint = RevOrange)
                     }
                 }
             )
@@ -152,10 +205,26 @@ fun MessagesScreen(
 
             // Input bar
             Row(
-                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                modifier = Modifier.fillMaxWidth().padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                IconButton(
+                    onClick = {
+                        photoPicker.launch(
+                            androidx.activity.result.PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
+                    },
+                    modifier = Modifier.size(36.dp).clip(CircleShape).background(RevOrange.copy(alpha = .10f)),
+                ) { Icon(Icons.Default.Image, null, tint = RevOrange, modifier = Modifier.size(18.dp)) }
+
+                IconButton(
+                    onClick = { docPicker.launch(arrayOf("application/pdf")) },
+                    modifier = Modifier.size(36.dp).clip(CircleShape).background(RevOrange.copy(alpha = .10f)),
+                ) { Icon(Icons.Default.AttachFile, null, tint = RevOrange, modifier = Modifier.size(18.dp)) }
+
                 OutlinedTextField(
                     value = draft, onValueChange = vm::setDraft,
                     placeholder = { Text("Ton message…") },
@@ -165,7 +234,7 @@ fun MessagesScreen(
                 )
                 IconButton(
                     onClick = vm::send,
-                    enabled = draft.isNotBlank() && !isSending,
+                    enabled = (draft.isNotBlank() && !isSending),
                     modifier = Modifier.size(42.dp).clip(CircleShape).background(
                         Brush.linearGradient(listOf(RevOrange, RevRed))
                     ),
@@ -182,6 +251,8 @@ fun MessagesScreen(
 @Composable
 private fun MessageBubble(msg: Message) {
     val isUser = msg.isFromUser
+    val context = LocalContext.current
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
@@ -189,26 +260,97 @@ private fun MessageBubble(msg: Message) {
         Column(
             modifier = Modifier.widthIn(max = 280.dp),
             horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = 16.dp, topEnd = 16.dp,
-                            bottomStart = if (isUser) 16.dp else 4.dp,
-                            bottomEnd = if (isUser) 4.dp else 16.dp,
+            if (msg.hasAttachment) {
+                AttachmentPreview(msg, onOpen = { url ->
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    context.startActivity(intent)
+                })
+            }
+
+            if (msg.body.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .clip(
+                            RoundedCornerShape(
+                                topStart = 16.dp, topEnd = 16.dp,
+                                bottomStart = if (isUser) 16.dp else 4.dp,
+                                bottomEnd = if (isUser) 4.dp else 16.dp,
+                            )
                         )
-                    )
-                    .background(
-                        if (isUser) Brush.linearGradient(listOf(RevOrange, RevRed))
-                        else Brush.linearGradient(listOf(RevCardBackground, RevCardBackground))
-                    )
-                    .padding(horizontal = 14.dp, vertical = 9.dp),
-            ) {
-                Text(msg.body, color = if (isUser) Color.White else RevBrown, fontSize = 15.sp)
+                        .background(
+                            if (isUser) Brush.linearGradient(listOf(RevOrange, RevRed))
+                            else Brush.linearGradient(listOf(RevCardBackground, RevCardBackground))
+                        )
+                        .padding(horizontal = 14.dp, vertical = 9.dp),
+                ) {
+                    Text(msg.body, color = if (isUser) Color.White else RevBrown, fontSize = 15.sp)
+                }
             }
             Text(msg.created_at.substring(11, 16), color = RevTextSecondary, fontSize = 10.sp,
                  modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
         }
     }
+}
+
+@Composable
+private fun AttachmentPreview(msg: Message, onOpen: (String) -> Unit) {
+    val url = msg.attachment_url ?: return
+    when (msg.attachment_type) {
+        "image" -> AsyncImage(
+            model = url,
+            contentDescription = null,
+            modifier = Modifier
+                .size(200.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .clickable { onOpen(url) },
+            contentScale = ContentScale.Crop,
+        )
+        else -> AttachmentCard(
+            icon = if (msg.attachment_type == "pdf") Icons.Default.PictureAsPdf else Icons.Default.FileOpen,
+            tint = if (msg.attachment_type == "pdf") RevRed else RevOrange,
+            name = msg.attachment_name ?: "Document",
+            type = msg.attachment_type ?: "fichier",
+            size = msg.attachment_size,
+            onClick = { onOpen(url) },
+        )
+    }
+}
+
+@Composable
+private fun AttachmentCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: Color,
+    name: String,
+    type: String,
+    size: Int?,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .width(240.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(RevCardBackground)
+            .clickable(onClick = onClick)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(tint),
+            contentAlignment = Alignment.Center,
+        ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp)) }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(name, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1)
+            Text("${type.uppercase()} · ${formatSize(size)}", color = RevTextSecondary, fontSize = 11.sp)
+        }
+    }
+}
+
+private fun formatSize(bytes: Int?): String {
+    if (bytes == null) return "—"
+    if (bytes < 1024) return "$bytes B"
+    if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0)
+    return String.format("%.1f MB", bytes / (1024.0 * 1024.0))
 }

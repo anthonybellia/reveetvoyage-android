@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -209,6 +211,7 @@ class VoyageDetailViewModel @Inject constructor(
         else _etapes.value.count { it.is_completed }.toFloat() / _etapes.value.size
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoyageDetailScreen(voyageId: Int, onBack: () -> Unit, vm: VoyageDetailViewModel = hiltViewModel()) {
     val voyage by vm.voyage.collectAsState()
@@ -245,7 +248,7 @@ fun VoyageDetailScreen(voyageId: Int, onBack: () -> Unit, vm: VoyageDetailViewMo
                 ) {
                     HeaderCard(v)
                     ProgressCard(done = etapes.count { it.is_completed }, total = etapes.size, value = vm.progress)
-                    SectionTitle("Étapes du voyage", Icons.Default.List)
+                    SectionTitle("Étapes du voyage", Icons.AutoMirrored.Filled.List)
                     if (etapes.isEmpty()) {
                         GlassCard {
                             Text("Aucune étape n'a été ajoutée à ce voyage.",

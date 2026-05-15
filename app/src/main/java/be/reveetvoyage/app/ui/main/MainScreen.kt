@@ -118,7 +118,19 @@ fun MainScreen(onLogout: () -> Unit) {
             // Sub-routes
             composable("voyage/{id}") { entry ->
                 val id = entry.arguments?.getString("id")?.toIntOrNull() ?: 0
-                VoyageDetailScreen(voyageId = id, onBack = { navController.popBackStack() })
+                VoyageDetailScreen(
+                    voyageId = id,
+                    onBack = { navController.popBackStack() },
+                    onOpenEtape = { etapeId -> navController.navigate("voyage/$id/etape/$etapeId") },
+                )
+            }
+            composable("voyage/{voyageId}/etape/{etapeId}") { entry ->
+                val voyageId = entry.arguments?.getString("voyageId")?.toIntOrNull() ?: 0
+                val etapeId = entry.arguments?.getString("etapeId")?.toIntOrNull() ?: 0
+                EtapeDetailScreen(
+                    voyageId = voyageId, etapeId = etapeId,
+                    onBack = { navController.popBackStack() },
+                )
             }
             composable("edit-profile") { EditProfileScreen(onBack = { navController.popBackStack() }) }
             composable("change-password") { ChangePasswordScreen(onBack = { navController.popBackStack() }) }

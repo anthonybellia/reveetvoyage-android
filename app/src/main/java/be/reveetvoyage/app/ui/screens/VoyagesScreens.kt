@@ -220,10 +220,16 @@ class VoyageDetailViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VoyageDetailScreen(voyageId: Int, onBack: () -> Unit, vm: VoyageDetailViewModel = hiltViewModel()) {
+fun VoyageDetailScreen(
+    voyageId: Int,
+    onBack: () -> Unit,
+    onOpenEtape: (Int) -> Unit = {},
+    vm: VoyageDetailViewModel = hiltViewModel(),
+) {
     val voyage by vm.voyage.collectAsState()
     val etapes by vm.etapes.collectAsState()
     val toggling by vm.toggling.collectAsState()
+    var pendingToggle by remember { mutableStateOf<VoyageEtape?>(null) }
 
     LaunchedEffect(voyageId) { vm.load(voyageId) }
 
@@ -269,13 +275,45 @@ fun VoyageDetailScreen(voyageId: Int, onBack: () -> Unit, vm: VoyageDetailViewMo
                                 isFirst = index == 0,
                                 isLast = index == etapes.lastIndex,
                                 isToggling = etape.id in toggling,
-                                onToggle = { vm.toggle(v.id, etape) }
+                                onToggle = { pendingToggle = etape },
+                                onOpenDetail = { onOpenEtape(etape.id) },
                             )
                         }
                     }
                     Spacer(Modifier.height(20.dp))
                 }
             } ?: LoadingFull()
+        }
+
+        // Confirmation dialog
+        if (pendingToggle != null) {
+            val e = pendingToggle!!
+            AlertDialog(
+                onDismissRequest = { pendingToggle = null },
+                title = {
+                    Text(if (e.is_completed) "Marquer non effectuée ?"
+                         else "As-tu bien réalisé cette étape ?")
+                },
+                text = {
+                    if (!e.is_completed) {
+                        Text("Tu peux passer à l'étape suivante. On te rappellera les prochaines.")
+                    } else null
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        vm.toggle(voyageId, e); pendingToggle = null
+                    }) {
+                        Text(
+                            if (e.is_completed) "Marquer non effectuée" else "Oui, c'est fait ✅",
+                            color = if (e.is_completed) RevRed else RevOrange,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingToggle = null }) { Text("Annuler") }
+                }
+            )
         }
     }
 }
@@ -300,6 +338,33 @@ private fun HeaderCard(v: Voyage) {
                 Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     DateChip("Départ", v.date_depart, Icons.Default.FlightTakeoff)
                     DateChip("Retour", v.date_retour, Icons.Default.FlightLand)
+                }
+            }
+            v.participants?.takeIf { it.isNotEmpty() }?.let { ps ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Default.Group, null, tint = RevOrange, modifier = Modifier.size(11.dp))
+                        Text("VOYAGEURS (${ps.size})", color = RevOrange,
+                             fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                    androidx.compose.foundation.lazy.LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        items(ps) { name ->
+                            Row(modifier = Modifier
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(RevYellow.copy(alpha = .25f))
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Icon(Icons.Default.Person, null, tint = RevBrown, modifier = Modifier.size(12.dp))
+                                Text(name, color = RevBrown, fontSize = 12.sp,
+                                     fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
                 }
             }
             if (v.montant_total > 0) {
@@ -356,6 +421,7 @@ private fun EtapeRow(
     isLast: Boolean,
     isToggling: Boolean,
     onToggle: () -> Unit,
+    onOpenDetail: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Column(modifier = Modifier.width(30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -365,7 +431,11 @@ private fun EtapeRow(
             Box(modifier = Modifier.width(2.dp).weight(1f).heightIn(min = 30.dp)
                 .background(if (isLast) Color.Transparent else RevOrange.copy(alpha = .3f)))
         }
-        EtapeContent(etape, modifier = Modifier.weight(1f).padding(bottom = if (isLast) 0.dp else 12.dp))
+        EtapeContent(
+            etape,
+            modifier = Modifier.weight(1f).padding(bottom = if (isLast) 0.dp else 12.dp)
+                .clickable(onClick = onOpenDetail),
+        )
     }
 }
 

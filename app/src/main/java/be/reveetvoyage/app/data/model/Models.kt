@@ -88,6 +88,7 @@ data class Voyage(
     val statut: String,
     val statut_label: String,
     val description: String? = null,
+    val participants: List<String>? = null,
     val token: String? = null,
     val etapes: List<VoyageEtape>? = null,
 )

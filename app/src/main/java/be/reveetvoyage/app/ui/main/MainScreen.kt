@@ -91,6 +91,10 @@ fun MainScreen(onLogout: () -> Unit) {
                     onOpenLanguage = { navController.navigate("language") },
                     onOpenNotifications = { navController.navigate("notif-settings") },
                     onOpenMessages = { navController.navigate("messages") },
+                    onOpenPage = { slug, title ->
+                        val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
+                        navController.navigate("page/$slug/$encodedTitle")
+                    },
                 )
             }
 
@@ -111,6 +115,11 @@ fun MainScreen(onLogout: () -> Unit) {
             }
             composable("messages") {
                 MessagesScreen(onBack = { navController.popBackStack() })
+            }
+            composable("page/{slug}/{title}") { entry ->
+                val slug = entry.arguments?.getString("slug") ?: ""
+                val title = java.net.URLDecoder.decode(entry.arguments?.getString("title") ?: "", "UTF-8")
+                PageScreen(slug = slug, fallbackTitle = title, onBack = { navController.popBackStack() })
             }
         }
     }

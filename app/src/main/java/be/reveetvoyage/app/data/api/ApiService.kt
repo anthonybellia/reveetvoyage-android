@@ -78,4 +78,8 @@ interface ApiService {
 
     @GET("messages/unread-count")
     suspend fun unreadCount(): UnreadCountResponse
+
+    // Pages dynamiques (CGU, confidentialité, etc.) — public
+    @GET("pages/{slug}")
+    suspend fun page(@Path("slug") slug: String): PageResponse
 }

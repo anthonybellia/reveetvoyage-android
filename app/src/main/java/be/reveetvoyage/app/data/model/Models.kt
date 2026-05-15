@@ -185,3 +185,12 @@ data class PaginatedResponse<T>(val data: List<T> = emptyList())
 
 @Serializable
 data class WrappedResponse<T>(val data: T)
+
+@Serializable
+data class PageResponse(
+    val slug: String,
+    val title: String,
+    val content_html: String,
+    val meta_description: String? = null,
+    val updated_at: String? = null,
+)

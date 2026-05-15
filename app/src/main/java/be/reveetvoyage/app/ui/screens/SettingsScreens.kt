@@ -90,6 +90,7 @@ fun SettingsScreen(
     onOpenLanguage: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenMessages: () -> Unit,
+    onOpenPage: (slug: String, title: String) -> Unit,
     vm: SettingsViewModel = hiltViewModel(),
 ) {
     val user by vm.currentUser.collectAsState()
@@ -143,6 +144,27 @@ fun SettingsScreen(
                         "en" -> "English"; "nl" -> "Nederlands"; else -> "Français"
                     }
                     SettingsRow(Icons.Default.Language, "Langue", langLabel, RevOrange, onClick = onOpenLanguage)
+                }
+            }
+
+            // Légal
+            GlassCard(modifier = Modifier.fillMaxWidth(), padding = 0) {
+                Column {
+                    SettingsRow(Icons.Default.Description, "Conditions générales",
+                        "Lire les CGU", RevTextSecondary,
+                        onClick = { onOpenPage("conditions-generales", "Conditions générales") })
+                    Divider(modifier = Modifier.padding(start = 60.dp))
+                    SettingsRow(Icons.Default.PrivacyTip, "Confidentialité",
+                        "Protection des données", RevTextSecondary,
+                        onClick = { onOpenPage("politique-de-confidentialite", "Confidentialité") })
+                    Divider(modifier = Modifier.padding(start = 60.dp))
+                    SettingsRow(Icons.Default.Receipt, "Conditions de vente",
+                        "CGV applicables", RevTextSecondary,
+                        onClick = { onOpenPage("conditions-de-vente", "Conditions de vente") })
+                    Divider(modifier = Modifier.padding(start = 60.dp))
+                    SettingsRow(Icons.Default.Help, "Aide",
+                        "Contacte l'équipe Rêve et Voyage", RevTextSecondary,
+                        onClick = onOpenMessages)
                 }
             }
 

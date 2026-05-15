@@ -168,6 +168,8 @@ fun VoyageCard(v: Voyage, onClick: () -> Unit) {
 @HiltViewModel
 class VoyageDetailViewModel @Inject constructor(
     private val repo: VoyageRepository,
+    private val notifier: be.reveetvoyage.app.notifications.NotificationScheduler,
+    private val userRepo: be.reveetvoyage.app.data.repo.UserRepository,
 ) : ViewModel() {
     private val _voyage = MutableStateFlow<Voyage?>(null)
     val voyage: StateFlow<Voyage?> = _voyage.asStateFlow()
@@ -178,9 +180,14 @@ class VoyageDetailViewModel @Inject constructor(
 
     fun load(id: Int) {
         viewModelScope.launch {
-            runCatching { repo.detail(id) }.onSuccess {
-                _voyage.value = it
-                _etapes.value = it.etapes.orEmpty()
+            runCatching { repo.detail(id) }.onSuccess { v ->
+                _voyage.value = v
+                _etapes.value = v.etapes.orEmpty()
+
+                // Schedule local reminders if user opted in
+                val notifEnabled = userRepo.currentUser.value?.notif_voyages ?: true
+                if (notifEnabled) notifier.scheduleVoyage(v)
+                else notifier.cancelVoyage(v.id)
             }
         }
     }

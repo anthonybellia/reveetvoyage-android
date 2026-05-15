@@ -92,7 +92,7 @@ fun EtapeDetailScreen(
                             GlassCard(modifier = Modifier.fillMaxWidth()) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionTitle("Notes", Icons.Default.Description)
-                                    Text(etape.description, color = RevText, fontSize = 14.sp)
+                                    Text(etape.description, color = RevBrown, fontSize = 14.sp)
                                 }
                             }
                         }

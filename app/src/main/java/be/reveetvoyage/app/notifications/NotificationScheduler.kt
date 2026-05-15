@@ -12,6 +12,7 @@ import androidx.work.*
 import be.reveetvoyage.app.MainActivity
 import be.reveetvoyage.app.R
 import be.reveetvoyage.app.data.model.Voyage
+import be.reveetvoyage.app.data.model.VoyageEtape
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -71,9 +72,11 @@ class NotificationScheduler @Inject constructor(
                 "title" to spec.title,
                 "body" to spec.body,
             )
+            val tag = "voyage-${voyage.id}"
             val request = OneTimeWorkRequestBuilder<NotificationWorker>()
                 .setInitialDelay(fireTime - now, TimeUnit.MILLISECONDS)
                 .setInputData(data)
+                .addTag(tag)
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 "$WORK_PREFIX${voyage.id}-${spec.key}",
@@ -81,13 +84,44 @@ class NotificationScheduler @Inject constructor(
                 request,
             )
         }
+
+        // 30-min-before reminders for each étape with date + heure
+        for (etape in voyage.etapes.orEmpty()) {
+            val etapeFireTime = etapeFireTimeMillis(etape) ?: continue
+            val now = System.currentTimeMillis()
+            if (etapeFireTime <= now) continue
+
+            val body = buildString {
+                etape.heure?.let { append("Prévu à $it") }
+                val loc = etape.lieu
+                if (!loc.isNullOrBlank()) {
+                    if (isNotEmpty()) append(" — ")
+                    append(loc)
+                }
+                if (isEmpty()) append("Prépare-toi pour la prochaine étape.")
+            }
+
+            val data = workDataOf(
+                "voyage_id" to voyage.id,
+                "title" to "Dans 30 min : ${etape.titre}",
+                "body" to body,
+            )
+            val tag = "voyage-${voyage.id}"
+            val request = OneTimeWorkRequestBuilder<NotificationWorker>()
+                .setInitialDelay(etapeFireTime - now, TimeUnit.MILLISECONDS)
+                .setInputData(data)
+                .addTag(tag)
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                "${WORK_PREFIX}${voyage.id}-etape-${etape.id}-30min",
+                ExistingWorkPolicy.REPLACE,
+                request,
+            )
+        }
     }
 
     fun cancelVoyage(voyageId: Int) {
-        // Cancel all 5 reminders for this voyage
-        listOf("j15", "j7", "j2", "j1morning", "j1airport").forEach { key ->
-            WorkManager.getInstance(context).cancelUniqueWork("$WORK_PREFIX$voyageId-$key")
-        }
+        WorkManager.getInstance(context).cancelAllWorkByTag("voyage-$voyageId")
     }
 
     private fun ensureChannel() {
@@ -100,6 +134,22 @@ class NotificationScheduler @Inject constructor(
             val manager = context.getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)
         }
+    }
+
+    private fun etapeFireTimeMillis(etape: VoyageEtape): Long? {
+        val dateStr = etape.date ?: return null
+        val heure = etape.heure ?: return null
+        val baseDate = parseIso(dateStr) ?: return null
+        val parts = heure.split(":").mapNotNull { it.toIntOrNull() }
+        if (parts.size < 2) return null
+
+        val cal = Calendar.getInstance()
+        cal.time = baseDate
+        cal.set(Calendar.HOUR_OF_DAY, parts[0])
+        cal.set(Calendar.MINUTE, parts[1])
+        cal.set(Calendar.SECOND, 0)
+        cal.add(Calendar.MINUTE, -30)
+        return cal.timeInMillis
     }
 
     private fun parseIso(s: String): Date? {

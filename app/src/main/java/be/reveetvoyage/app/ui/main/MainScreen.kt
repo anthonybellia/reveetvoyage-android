@@ -75,7 +75,24 @@ fun MainScreen(onLogout: () -> Unit) {
                 HomeScreen(
                     onOpenVoyage = { id -> navController.navigate("voyage/$id") },
                     onOpenNotifications = { navController.navigate("notifications") },
-                    onOpenMessages = { navController.navigate("messages") },
+                    onOpenMessages = { navController.navigate("messages?draft=") },
+                    onOpenNewVoyageRequest = {
+                        val draft = "Bonjour ! J'aimerais faire une demande de voyage. " +
+                            "Voici mes critères :\n\n" +
+                            "• Destination : \n• Dates souhaitées : \n" +
+                            "• Nombre de personnes : \n" +
+                            "• Type (couple/famille/amis/solo/lune de miel) : \n" +
+                            "• Budget approximatif : \n\nMerci !"
+                        val encoded = java.net.URLEncoder.encode(draft, "UTF-8")
+                        navController.navigate("messages?draft=$encoded")
+                    },
+                    onOpenPassengers = {
+                        navController.navigate(Tab.Passengers.route) {
+                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
                 )
             }
             composable(Tab.Voyages.route) {
@@ -90,7 +107,7 @@ fun MainScreen(onLogout: () -> Unit) {
                     onOpenChangePassword = { navController.navigate("change-password") },
                     onOpenLanguage = { navController.navigate("language") },
                     onOpenNotifications = { navController.navigate("notif-settings") },
-                    onOpenMessages = { navController.navigate("messages") },
+                    onOpenMessages = { navController.navigate("messages?draft=") },
                     onOpenPage = { slug, title ->
                         val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
                         navController.navigate("page/$slug/$encodedTitle")
@@ -110,11 +127,18 @@ fun MainScreen(onLogout: () -> Unit) {
             composable("notifications") {
                 NotificationsScreen(
                     onBack = { navController.popBackStack() },
-                    onOpenMessages = { navController.navigate("messages") },
+                    onOpenMessages = { navController.navigate("messages?draft=") },
                 )
             }
-            composable("messages") {
-                MessagesScreen(onBack = { navController.popBackStack() })
+            composable(
+                "messages?draft={draft}",
+                arguments = listOf(androidx.navigation.navArgument("draft") {
+                    type = androidx.navigation.NavType.StringType; nullable = true; defaultValue = null
+                })
+            ) { entry ->
+                val raw = entry.arguments?.getString("draft")
+                val decoded = raw?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+                MessagesScreen(onBack = { navController.popBackStack() }, initialDraft = decoded)
             }
             composable("page/{slug}/{title}") { entry ->
                 val slug = entry.arguments?.getString("slug") ?: ""

@@ -72,6 +72,8 @@ fun HomeScreen(
     onOpenVoyage: (Int) -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenMessages: () -> Unit,
+    onOpenNewVoyageRequest: () -> Unit,
+    onOpenPassengers: () -> Unit,
     vm: HomeViewModel = hiltViewModel(),
 ) {
     val voyages by vm.voyages.collectAsState()
@@ -89,7 +91,10 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
             HeroHeader(user, unread, onOpenNotifications)
-            QuickActions(onMessages = onOpenMessages)
+            QuickActions(
+                onNewVoyage = onOpenNewVoyageRequest,
+                onPassengers = onOpenPassengers,
+            )
 
             // Voyages section
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -158,7 +163,7 @@ private fun HeroHeader(user: User?, unread: Int, onBellClick: () -> Unit) {
 }
 
 @Composable
-private fun QuickActions(onMessages: () -> Unit) {
+private fun QuickActions(onNewVoyage: () -> Unit, onPassengers: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
         QuickCard(
             title = "Nouveau voyage",
@@ -166,15 +171,15 @@ private fun QuickActions(onMessages: () -> Unit) {
             icon = Icons.Default.FlightTakeoff,
             colors = listOf(RevYellow, RevOrange),
             modifier = Modifier.weight(1f),
-            onClick = {},
+            onClick = onNewVoyage,
         )
         QuickCard(
-            title = "Messagerie",
-            subtitle = "Parle à l'équipe",
-            icon = Icons.Default.ChatBubble,
+            title = "Mes passagers",
+            subtitle = "Gérer la liste",
+            icon = Icons.Default.Group,
             colors = listOf(RevOrange, RevRed),
             modifier = Modifier.weight(1f),
-            onClick = onMessages,
+            onClick = onPassengers,
         )
     }
 }

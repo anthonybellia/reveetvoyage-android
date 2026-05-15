@@ -91,11 +91,21 @@ class MessagesViewModel @Inject constructor(private val repo: MessageRepository)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MessagesScreen(onBack: () -> Unit, vm: MessagesViewModel = hiltViewModel()) {
+fun MessagesScreen(
+    onBack: () -> Unit,
+    initialDraft: String? = null,
+    vm: MessagesViewModel = hiltViewModel(),
+) {
     val messages by vm.messages.collectAsState()
     val draft by vm.draft.collectAsState()
     val isSending by vm.isSending.collectAsState()
     val listState = rememberLazyListState()
+
+    LaunchedEffect(initialDraft) {
+        if (!initialDraft.isNullOrEmpty() && draft.isEmpty()) {
+            vm.setDraft(initialDraft)
+        }
+    }
 
     DisposableEffect(Unit) { vm.start(); onDispose { vm.stop() } }
     LaunchedEffect(messages.size) {

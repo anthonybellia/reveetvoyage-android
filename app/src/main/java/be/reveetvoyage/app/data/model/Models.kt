@@ -47,6 +47,34 @@ data class RegisterRequest(
 )
 
 @Serializable
+data class UpdateProfileRequest(
+    val prenom: String? = null,
+    val nom: String? = null,
+    val phone: String? = null,
+    val date_naissance: String? = null,
+    val nationalite: String? = null,
+    val adresse: String? = null,
+    val code_postal: String? = null,
+    val ville: String? = null,
+    val pays: String? = null,
+)
+
+@Serializable
+data class UpdatePasswordRequest(
+    val current_password: String,
+    val password: String,
+    val password_confirmation: String,
+)
+
+@Serializable
+data class UpdatePreferencesRequest(
+    val language: String? = null,
+    val notif_emails: Boolean? = null,
+    val notif_promo: Boolean? = null,
+    val notif_voyages: Boolean? = null,
+)
+
+@Serializable
 data class Voyage(
     val id: Int,
     val reference: String,
@@ -80,7 +108,9 @@ data class VoyageEtape(
     val cout: Double? = null,
     val is_completed: Boolean = false,
     val completed_at: String? = null,
-)
+) {
+    val hasCoordinates: Boolean get() = latitude != null && longitude != null
+}
 
 @Serializable
 data class Devis(
@@ -96,6 +126,10 @@ data class Devis(
     val nb_personnes: Int? = null,
     val budget: String? = null,
     val duree: String? = null,
+    val message: String? = null,
+    val cadre: String? = null,
+    val hebergement: String? = null,
+    val activites: String? = null,
 )
 
 @Serializable
@@ -111,6 +145,20 @@ data class Passenger(
     val notes: String? = null,
     val expiration_doc: String? = null,
     val is_default: Boolean = false,
+)
+
+@Serializable
+data class PassengerRequest(
+    val nom: String,
+    val prenom: String,
+    val date_naissance: String? = null,
+    val type_doc: String? = null,
+    val num_doc: String? = null,
+    val nationalite: String? = null,
+    val notes: String? = null,
+    val expiration_doc: String? = null,
+    val is_default: Boolean = false,
+    val langues: List<String>? = null,
 )
 
 @Serializable

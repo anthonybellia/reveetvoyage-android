@@ -8,41 +8,39 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import be.reveetvoyage.app.R
 import be.reveetvoyage.app.ui.theme.*
+import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 
 @Composable
 fun SplashScreen() {
     val scale = remember { Animatable(0.5f) }
-    val alpha = remember { Animatable(0f) }
+    val alphaAnim = remember { Animatable(0f) }
     val rotation = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.coroutineScope {
-            launch {
-                scale.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessLow))
-            }
-            launch {
-                alpha.animateTo(1f, tween(durationMillis = 600))
-            }
-            launch {
-                rotation.animateTo(
-                    targetValue = 360f,
-                    animationSpec = infiniteRepeatable(
-                        tween(durationMillis = 12000, easing = LinearEasing),
-                        RepeatMode.Restart
-                    )
+        launch {
+            scale.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessLow))
+        }
+        launch {
+            alphaAnim.animateTo(1f, tween(durationMillis = 600))
+        }
+        launch {
+            rotation.animateTo(
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(
+                    tween(durationMillis = 12000, easing = LinearEasing),
+                    RepeatMode.Restart
                 )
-            }
+            )
         }
     }
 
@@ -60,15 +58,15 @@ fun SplashScreen() {
             ),
         contentAlignment = Alignment.Center,
     ) {
-        OrbitingDots(rotation = rotation.value, alpha = alpha.value)
+        OrbitingDots(rotation = rotation.value, alpha = alphaAnim.value)
 
         Image(
-            painter = androidx.compose.ui.res.painterResource(id = R.drawable.icon_brand),
+            painter = painterResource(id = R.drawable.icon_brand),
             contentDescription = null,
             modifier = Modifier
                 .size(200.dp)
                 .scale(scale.value)
-                .alpha(alpha.value),
+                .alpha(alphaAnim.value),
         )
     }
 }
@@ -78,7 +76,7 @@ private fun OrbitingDots(rotation: Float, alpha: Float) {
     val palette = listOf(RevYellow, RevOrange, RevRed)
     Box(modifier = Modifier.size(360.dp), contentAlignment = Alignment.Center) {
         for (i in 0 until 8) {
-            val angle = Math.toRadians((i * 45.0 + rotation))
+            val angle = Math.toRadians(i * 45.0 + rotation)
             val radius = 130f
             val x = (cos(angle) * radius).toFloat()
             val y = (sin(angle) * radius).toFloat()
@@ -93,7 +91,3 @@ private fun OrbitingDots(rotation: Float, alpha: Float) {
         }
     }
 }
-
-private fun Modifier.alpha(value: Float): Modifier = this.then(
-    androidx.compose.ui.draw.alpha(value)
-)

@@ -1,12 +1,8 @@
 package be.reveetvoyage.app.data.api
 
 import be.reveetvoyage.app.data.model.*
-import retrofit2.http.Body
-import retrofit2.http.GET
-import retrofit2.http.POST
-import retrofit2.http.PUT
-import retrofit2.http.Path
-import retrofit2.http.Query
+import okhttp3.MultipartBody
+import retrofit2.http.*
 
 interface ApiService {
 
@@ -20,6 +16,19 @@ interface ApiService {
     // Auth (authenticated)
     @GET("auth/me")
     suspend fun me(): MeResponse
+
+    @PUT("auth/me")
+    suspend fun updateMe(@Body req: UpdateProfileRequest): MeResponse
+
+    @POST("auth/me/password")
+    suspend fun updatePassword(@Body req: UpdatePasswordRequest): Map<String, String>
+
+    @PUT("auth/me/preferences")
+    suspend fun updatePreferences(@Body req: UpdatePreferencesRequest): MeResponse
+
+    @Multipart
+    @POST("auth/me/avatar")
+    suspend fun uploadAvatar(@Part avatar: MultipartBody.Part): MeResponse
 
     @POST("auth/logout")
     suspend fun logout(): Map<String, Boolean>
@@ -50,6 +59,15 @@ interface ApiService {
     // Passengers
     @GET("passengers")
     suspend fun passengers(): PaginatedResponse<Passenger>
+
+    @POST("passengers")
+    suspend fun createPassenger(@Body req: PassengerRequest): WrappedResponse<Passenger>
+
+    @PUT("passengers/{id}")
+    suspend fun updatePassenger(@Path("id") id: Int, @Body req: PassengerRequest): WrappedResponse<Passenger>
+
+    @DELETE("passengers/{id}")
+    suspend fun deletePassenger(@Path("id") id: Int): Map<String, String>
 
     // Messages
     @GET("messages")

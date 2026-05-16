@@ -184,6 +184,14 @@ fun SettingsScreen(
                         "@matilda_travelplanner",
                         onClick = { openUrl(linksContext, "https://www.instagram.com/matilda_travelplanner") })
                     RowDivider()
+                    SettingsRow(Icons.Default.CreditCard, "Revolut",
+                        "Carte voyage sans frais",
+                        onClick = { openUrl(linksContext, "https://revolut.com/referral/?referral-code=mlarosa97!MAY2-26-AR-H1&geo-redirect") })
+                    RowDivider()
+                    SettingsRow(Icons.Default.Wifi, "Holafly",
+                        "eSIM data internationale",
+                        onClick = { openUrl(linksContext, "https://www.holafly.com/?ref=reveetvoyage") })
+                    RowDivider()
                     SettingsRow(Icons.Default.Star, "Noter l'app",
                         "Sur le Play Store",
                         onClick = { openUrl(linksContext, "market://details?id=be.reveetvoyage.app") })

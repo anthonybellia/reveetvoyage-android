@@ -23,6 +23,31 @@ class VoyageRepository @Inject constructor(private val api: ApiService) {
 }
 
 @Singleton
+class ExpenseRepository @Inject constructor(private val api: ApiService) {
+    suspend fun participants(voyageId: Int) = api.voyageParticipants(voyageId).data
+    suspend fun addGuest(voyageId: Int, displayName: String) =
+        api.addVoyageParticipant(voyageId, CreateParticipantRequest(display_name = displayName)).data
+    suspend fun inviteByEmail(voyageId: Int, email: String) =
+        api.addVoyageParticipant(voyageId, CreateParticipantRequest(email = email)).data
+    suspend fun removeParticipant(voyageId: Int, participantId: Int) =
+        api.deleteVoyageParticipant(voyageId, participantId)
+
+    suspend fun expenses(voyageId: Int, since: String? = null) =
+        api.voyageExpenses(voyageId, since).data
+    suspend fun createExpense(voyageId: Int, req: CreateExpenseRequest) =
+        api.createVoyageExpense(voyageId, req).data
+    suspend fun updateExpense(voyageId: Int, expenseId: Int, req: CreateExpenseRequest) =
+        api.updateVoyageExpense(voyageId, expenseId, req).data
+    suspend fun deleteExpense(voyageId: Int, expenseId: Int) =
+        api.deleteVoyageExpense(voyageId, expenseId)
+
+    suspend fun settlement(voyageId: Int) = api.voyageSettlement(voyageId)
+
+    suspend fun searchPlaces(q: String, lat: Double? = null, lng: Double? = null) =
+        api.searchPlaces(q, lat, lng).data
+}
+
+@Singleton
 class DevisRepository @Inject constructor(private val api: ApiService) {
     suspend fun list(page: Int = 1) = api.devis(page).data
 }

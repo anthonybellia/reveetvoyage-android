@@ -20,12 +20,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
+import kotlin.random.Random
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -218,49 +225,213 @@ class VoyageDetailViewModel @Inject constructor(
         else _etapes.value.count { it.is_completed }.toFloat() / _etapes.value.size
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+// ============================================================
+// VoyageHero — map + weather card overlay for the voyage destination
+// ============================================================
+@Composable
+private fun VoyageHero(etape: VoyageEtape) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var coords by remember(etape.id) {
+        mutableStateOf<Pair<Double, Double>?>(
+            if (etape.hasCoordinates) Pair(etape.latitude!!, etape.longitude!!) else null
+        )
+    }
+    val weatherVm: be.reveetvoyage.app.ui.components.WeatherViewModel = hiltViewModel(key = "weather-voyage-${etape.id}")
+    val weather by weatherVm.weather.collectAsState()
+    val weatherLoading by weatherVm.loading.collectAsState()
+    val locationLabel by weatherVm.locationLabel.collectAsState()
+
+    LaunchedEffect(etape.id, etape.adresse, etape.lieu) {
+        if (coords == null) {
+            val query = listOfNotNull(etape.adresse, etape.lieu)
+                .filter { it.isNotBlank() }.joinToString(", ")
+            if (query.isNotBlank()) {
+                val resolved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        val gc = android.location.Geocoder(context, java.util.Locale.getDefault())
+                        @Suppress("DEPRECATION")
+                        gc.getFromLocationName(query, 1)?.firstOrNull()?.let { Pair(it.latitude, it.longitude) }
+                    } catch (t: Throwable) { null }
+                }
+                if (resolved != null) coords = resolved
+            }
+        }
+        coords?.let { (lat, lng) ->
+            val city = etape.lieu?.takeIf { it.isNotBlank() }
+                ?: be.reveetvoyage.app.ui.components.reverseGeocodeCity(context, lat, lng)
+                ?: etape.titre
+            weatherVm.load(lat, lng, city)
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+        coords?.let { (lat, lng) ->
+            Box(modifier = Modifier.fillMaxWidth().height(180.dp)) {
+                androidx.compose.ui.viewinterop.AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { ctx ->
+                        org.osmdroid.views.MapView(ctx).apply {
+                            setTileSource(org.osmdroid.tileprovider.tilesource.TileSourceFactory.MAPNIK)
+                            setMultiTouchControls(false)
+                            isClickable = false
+                            controller.setZoom(11.0)
+                            controller.setCenter(org.osmdroid.util.GeoPoint(lat, lng))
+                            val marker = org.osmdroid.views.overlay.Marker(this)
+                            marker.position = org.osmdroid.util.GeoPoint(lat, lng)
+                            marker.setAnchor(
+                                org.osmdroid.views.overlay.Marker.ANCHOR_CENTER,
+                                org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM,
+                            )
+                            overlays.add(marker)
+                        }
+                    },
+                )
+            }
+        }
+        Box(modifier = Modifier.padding(horizontal = 18.dp)) {
+            be.reveetvoyage.app.ui.components.WeatherCard(
+                weather = weather,
+                locationLabel = locationLabel,
+                isLoading = weatherLoading,
+            )
+        }
+    }
+}
+
+// ============================================================
+// Celebration overlay — particle burst when an étape is completed
+// ============================================================
+private data class CelebrationParticle(
+    val id: Int,
+    val icon: ImageVector,
+    val color: Color,
+    val initialDx: Float,
+    val targetDx: Float,
+    val targetDy: Float,
+    val rotationDelta: Float,
+    val finalScale: Float,
+)
+
+@Composable
+private fun CelebrationOverlay(burst: Int) {
+    if (burst == 0) return
+    val density = LocalDensity.current
+    val icons = remember {
+        listOf(Icons.Default.Star, Icons.Default.Favorite, Icons.Default.AutoAwesome, Icons.Default.Flight)
+    }
+    val colors = remember { listOf(RevYellow, RevOrange, RevRed) }
+
+    val particles = remember(burst) {
+        (0 until 18).map { idx ->
+            CelebrationParticle(
+                id = idx,
+                icon = icons[Random.nextInt(icons.size)],
+                color = colors[Random.nextInt(colors.size)],
+                initialDx = Random.nextFloat() * 60f - 30f,
+                targetDx = Random.nextFloat() * 360f - 180f,
+                targetDy = -(Random.nextFloat() * 220f + 80f),
+                rotationDelta = Random.nextFloat() * 540f + 180f,
+                finalScale = Random.nextFloat() * 0.6f + 0.8f,
+            )
+        }
+    }
+
+    val animation = remember(burst) { Animatable(0f) }
+    LaunchedEffect(burst) {
+        animation.snapTo(0f)
+        animation.animateTo(1f, animationSpec = tween(durationMillis = 1100, easing = EaseOutCubic))
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val centerXpx = with(density) { (maxWidth / 2).toPx() }
+            val centerYpx = with(density) { (maxHeight / 2).toPx() }
+            val progress = animation.value
+
+            particles.forEach { p ->
+                val dxNow  = p.initialDx + (p.targetDx - p.initialDx) * progress
+                val dyNow  = p.targetDy * progress
+                val xPx    = centerXpx + with(density) { dxNow.dp.toPx() }
+                val yPx    = centerYpx + with(density) { dyNow.dp.toPx() }
+                val scale  = 0.4f + (p.finalScale - 0.4f) * progress
+                val rot    = p.rotationDelta * progress
+                val alpha  = (1f - progress).coerceIn(0f, 1f)
+
+                Icon(
+                    imageVector = p.icon,
+                    contentDescription = null,
+                    tint = p.color.copy(alpha = alpha),
+                    modifier = Modifier
+                        .offset { IntOffset(xPx.roundToInt(), yPx.roundToInt()) }
+                        .scale(scale)
+                        .rotate(rot)
+                        .size(28.dp)
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun VoyageDetailScreen(
     voyageId: Int,
     onBack: () -> Unit,
     onOpenEtape: (Int) -> Unit = {},
+    onOpenExpenses: (Int) -> Unit = {},
     vm: VoyageDetailViewModel = hiltViewModel(),
 ) {
     val voyage by vm.voyage.collectAsState()
     val etapes by vm.etapes.collectAsState()
     val toggling by vm.toggling.collectAsState()
     var pendingToggle by remember { mutableStateOf<VoyageEtape?>(null) }
+    var celebrationBurst by remember { mutableStateOf(0) }
+    var previousCompletedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
+
+    LaunchedEffect(etapes) {
+        val nowCompleted = etapes.filter { it.is_completed }.map { it.id }.toSet()
+        if (previousCompletedIds.isNotEmpty() && (nowCompleted - previousCompletedIds).isNotEmpty()) {
+            celebrationBurst++
+        }
+        previousCompletedIds = nowCompleted
+    }
 
     LaunchedEffect(voyageId) { vm.load(voyageId) }
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text(voyage?.reference ?: "Voyage", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
-                    }
-                }
-            )
-        }
-    ) { padding ->
+    Column(modifier = Modifier.fillMaxSize().background(RevBackground)) {
+        be.reveetvoyage.app.ui.components.IOSTopBar(
+            title = voyage?.reference ?: "Voyage",
+            onBack = onBack,
+        )
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .background(Brush.linearGradient(listOf(RevYellow.copy(alpha = .10f), RevBackground)))
+                .background(Brush.linearGradient(listOf(RevYellow.copy(alpha = .10f), RevBackground))),
         ) {
             voyage?.let { v ->
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
+                    val firstGeoEtape = etapes.firstOrNull { it.hasCoordinates }
+                        ?: etapes.firstOrNull { !it.adresse.isNullOrBlank() || !it.lieu.isNullOrBlank() }
+                    if (firstGeoEtape != null) {
+                        VoyageHero(etape = firstGeoEtape)
+                    }
+                    Column(
+                        modifier = Modifier.padding(horizontal = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
                     HeaderCard(v)
                     ProgressCard(done = etapes.count { it.is_completed }, total = etapes.size, value = vm.progress)
+                    IOSButton(
+                        text = "Dépenses partagées",
+                        onClick = { onOpenExpenses(voyageId) },
+                        icon = Icons.Default.Receipt,
+                        style = IOSButtonStyle.Secondary,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     SectionTitle("Étapes du voyage", Icons.AutoMirrored.Filled.List)
                     if (etapes.isEmpty()) {
                         GlassCard {
@@ -281,38 +452,27 @@ fun VoyageDetailScreen(
                         }
                     }
                     Spacer(Modifier.height(20.dp))
+                    }
                 }
             } ?: LoadingFull()
         }
 
-        // Confirmation dialog
-        if (pendingToggle != null) {
-            val e = pendingToggle!!
-            AlertDialog(
-                onDismissRequest = { pendingToggle = null },
-                title = {
-                    Text(if (e.is_completed) "Marquer non effectuée ?"
-                         else "As-tu bien réalisé cette étape ?")
+        CelebrationOverlay(burst = celebrationBurst)
+
+        // Confirmation dialog (iOS-style)
+        pendingToggle?.let { e ->
+            be.reveetvoyage.app.ui.components.IOSAlertDialog(
+                title = if (e.is_completed) "Marquer non effectuée ?" else "As-tu bien réalisé cette étape ?",
+                message = if (!e.is_completed) "Tu peux passer à l'étape suivante. On te rappellera les prochaines." else null,
+                confirmText = if (e.is_completed) "Marquer non effectuée" else "Oui, c'est fait",
+                cancelText = "Annuler",
+                isDestructive = e.is_completed,
+                onConfirm = {
+                    val wasCompleted = e.is_completed
+                    vm.toggle(voyageId, e); pendingToggle = null
+                    if (!wasCompleted) celebrationBurst++
                 },
-                text = {
-                    if (!e.is_completed) {
-                        Text("Tu peux passer à l'étape suivante. On te rappellera les prochaines.")
-                    } else null
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        vm.toggle(voyageId, e); pendingToggle = null
-                    }) {
-                        Text(
-                            if (e.is_completed) "Marquer non effectuée" else "Oui, c'est fait ✅",
-                            color = if (e.is_completed) RevRed else RevOrange,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { pendingToggle = null }) { Text("Annuler") }
-                }
+                onDismiss = { pendingToggle = null },
             )
         }
     }

@@ -92,4 +92,64 @@ interface ApiService {
     // Pages dynamiques (CGU, confidentialité, etc.) — public
     @GET("pages/{slug}")
     suspend fun page(@Path("slug") slug: String): PageResponse
+
+    // Weather (Open-Meteo proxy)
+    @GET("weather")
+    suspend fun weather(
+        @Query("lat") lat: Double,
+        @Query("lng") lng: Double,
+    ): WeatherResponse
+
+    // Places autocomplete
+    @GET("places/search")
+    suspend fun searchPlaces(
+        @Query("q") q: String,
+        @Query("lat") lat: Double? = null,
+        @Query("lng") lng: Double? = null,
+    ): PaginatedResponse<Place>
+
+    // ===== Voyage Expenses (Tricount-like) =====
+
+    @GET("voyages/{id}/participants")
+    suspend fun voyageParticipants(@Path("id") voyageId: Int): PaginatedResponse<VoyageParticipant>
+
+    @POST("voyages/{id}/participants")
+    suspend fun addVoyageParticipant(
+        @Path("id") voyageId: Int,
+        @Body req: CreateParticipantRequest,
+    ): WrappedResponse<VoyageParticipant>
+
+    @DELETE("voyages/{id}/participants/{pid}")
+    suspend fun deleteVoyageParticipant(
+        @Path("id") voyageId: Int,
+        @Path("pid") participantId: Int,
+    ): Map<String, String>
+
+    @GET("voyages/{id}/expenses")
+    suspend fun voyageExpenses(
+        @Path("id") voyageId: Int,
+        @Query("since") since: String? = null,
+    ): PaginatedResponse<VoyageExpense>
+
+    @POST("voyages/{id}/expenses")
+    suspend fun createVoyageExpense(
+        @Path("id") voyageId: Int,
+        @Body req: CreateExpenseRequest,
+    ): WrappedResponse<VoyageExpense>
+
+    @PUT("voyages/{id}/expenses/{eid}")
+    suspend fun updateVoyageExpense(
+        @Path("id") voyageId: Int,
+        @Path("eid") expenseId: Int,
+        @Body req: CreateExpenseRequest,
+    ): WrappedResponse<VoyageExpense>
+
+    @DELETE("voyages/{id}/expenses/{eid}")
+    suspend fun deleteVoyageExpense(
+        @Path("id") voyageId: Int,
+        @Path("eid") expenseId: Int,
+    ): Map<String, String>
+
+    @GET("voyages/{id}/settlement")
+    suspend fun voyageSettlement(@Path("id") voyageId: Int): SettlementResponse
 }

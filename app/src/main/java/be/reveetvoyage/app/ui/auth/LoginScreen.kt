@@ -3,7 +3,6 @@ package be.reveetvoyage.app.ui.auth
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
@@ -14,14 +13,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import be.reveetvoyage.app.R
+import be.reveetvoyage.app.ui.components.IOSButton
+import be.reveetvoyage.app.ui.components.IOSButtonStyle
+import be.reveetvoyage.app.ui.components.IOSTextField
 import be.reveetvoyage.app.ui.theme.*
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     onLoggedIn: () -> Unit,
@@ -48,7 +49,7 @@ fun LoginScreen(
                 .fillMaxSize()
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Spacer(Modifier.height(60.dp))
 
@@ -58,53 +59,51 @@ fun LoginScreen(
                 modifier = Modifier.size(130.dp),
             )
 
-            Text("Bon retour !", style = MaterialTheme.typography.headlineMedium, color = RevBrown)
-            Text("Connecte-toi pour continuer ton voyage", color = RevTextSecondary)
+            Text(
+                "Bon retour !",
+                style = MaterialTheme.typography.displaySmall,
+                color = RevBrown,
+            )
+            Text(
+                "Connecte-toi pour continuer ton voyage",
+                color = RevTextSecondary,
+                fontSize = 14.sp,
+            )
 
             Spacer(Modifier.height(12.dp))
 
-            OutlinedTextField(
+            IOSTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("Email") },
-                leadingIcon = { Icon(Icons.Default.Email, null) },
+                placeholder = "Email",
+                icon = Icons.Default.Email,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                singleLine = true,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth(),
             )
 
-            OutlinedTextField(
+            IOSTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Mot de passe") },
-                leadingIcon = { Icon(Icons.Default.Lock, null) },
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth(),
+                placeholder = "Mot de passe",
+                icon = Icons.Default.Lock,
+                isPassword = true,
             )
 
             error?.let {
                 Text(it, color = RevRed, style = MaterialTheme.typography.bodySmall)
             }
 
-            Button(
+            IOSButton(
+                text = "Se connecter",
+                style = IOSButtonStyle.Primary,
+                isLoading = isLoading,
+                enabled = email.isNotBlank() && password.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     scope.launch {
                         if (vm.login(email, password)) onLoggedIn()
                     }
                 },
-                enabled = !isLoading && email.isNotBlank() && password.isNotBlank(),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = RevOrange),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp),
-            ) {
-                if (isLoading) CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White, strokeWidth = 2.dp)
-                else Text("Se connecter", color = androidx.compose.ui.graphics.Color.White)
-            }
+            )
 
             TextButton(onClick = onGoToRegister) {
                 Text("Pas encore inscrit ? ", color = RevTextSecondary)

@@ -8,15 +8,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
@@ -41,6 +37,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import be.reveetvoyage.app.data.model.Message
 import be.reveetvoyage.app.data.repo.MessageRepository
+import be.reveetvoyage.app.ui.components.IOSTopBar
 import be.reveetvoyage.app.ui.theme.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -118,7 +115,6 @@ class MessagesViewModel @Inject constructor(private val repo: MessageRepository)
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessagesScreen(
     onBack: () -> Unit,
@@ -160,28 +156,18 @@ fun MessagesScreen(
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Équipe Rêve et Voyage", fontWeight = FontWeight.Bold, color = RevBrown) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onOpenFiles) {
-                        Icon(Icons.Default.Folder, null, tint = RevOrange)
-                    }
+    Column(modifier = Modifier.fillMaxSize().background(RevBackground)) {
+        IOSTopBar(
+            title = "Équipe Rêve et Voyage",
+            onBack = onBack,
+            trailing = {
+                IconButton(onClick = onOpenFiles) {
+                    Icon(Icons.Default.Folder, null, tint = RevOrange)
                 }
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).background(
-                Brush.verticalGradient(listOf(RevYellow.copy(alpha = .06f), RevBackground))
-            )
-        ) {
+            },
+        )
+
+        Column(modifier = Modifier.fillMaxSize()) {
             if (messages.isEmpty()) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -203,9 +189,9 @@ fun MessagesScreen(
                 }
             }
 
-            // Input bar
+            // iOS-style input bar — hairline border field + round attachment & send buttons
             Row(
-                modifier = Modifier.fillMaxWidth().padding(10.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -225,23 +211,49 @@ fun MessagesScreen(
                     modifier = Modifier.size(36.dp).clip(CircleShape).background(RevOrange.copy(alpha = .10f)),
                 ) { Icon(Icons.Default.AttachFile, null, tint = RevOrange, modifier = Modifier.size(18.dp)) }
 
-                OutlinedTextField(
-                    value = draft, onValueChange = vm::setDraft,
-                    placeholder = { Text("Ton message…") },
-                    shape = RoundedCornerShape(18.dp),
-                    maxLines = 4,
+                // Hairline-bordered input matching IOSTextField look but multiline
+                Surface(
                     modifier = Modifier.weight(1f),
-                )
+                    shape = RoundedCornerShape(18.dp),
+                    color = RevCardBackground,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x14000000)),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .heightIn(min = 38.dp)
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = draft,
+                            onValueChange = vm::setDraft,
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 4,
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(RevOrange),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = RevBrown,
+                                fontSize = 15.sp,
+                            ),
+                            decorationBox = { inner ->
+                                if (draft.isEmpty()) {
+                                    Text("Ton message…", color = RevTextSecondary, fontSize = 15.sp)
+                                }
+                                inner()
+                            },
+                        )
+                    }
+                }
+
                 IconButton(
                     onClick = vm::send,
                     enabled = (draft.isNotBlank() && !isSending),
-                    modifier = Modifier.size(42.dp).clip(CircleShape).background(
+                    modifier = Modifier.size(36.dp).clip(CircleShape).background(
                         Brush.linearGradient(listOf(RevOrange, RevRed))
                     ),
                 ) {
                     if (isSending) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp,
-                        modifier = Modifier.size(18.dp))
-                    else Icon(Icons.Default.Send, null, tint = Color.White)
+                        modifier = Modifier.size(16.dp))
+                    else Icon(Icons.Default.Send, null, tint = Color.White, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -270,22 +282,33 @@ private fun MessageBubble(msg: Message) {
             }
 
             if (msg.body.isNotEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .clip(
-                            RoundedCornerShape(
-                                topStart = 16.dp, topEnd = 16.dp,
-                                bottomStart = if (isUser) 16.dp else 4.dp,
-                                bottomEnd = if (isUser) 4.dp else 16.dp,
-                            )
-                        )
-                        .background(
-                            if (isUser) Brush.linearGradient(listOf(RevOrange, RevRed))
-                            else Brush.linearGradient(listOf(RevCardBackground, RevCardBackground))
-                        )
-                        .padding(horizontal = 14.dp, vertical = 9.dp),
-                ) {
-                    Text(msg.body, color = if (isUser) Color.White else RevBrown, fontSize = 15.sp)
+                // iOS chat bubble: user = orange gradient + tail bottom-right;
+                // admin = white + hairline border + RevBrown text
+                val bubbleShape = RoundedCornerShape(
+                    topStart = 18.dp,
+                    topEnd = 18.dp,
+                    bottomStart = if (isUser) 18.dp else 6.dp,
+                    bottomEnd = if (isUser) 6.dp else 18.dp,
+                )
+                if (isUser) {
+                    Box(
+                        modifier = Modifier
+                            .clip(bubbleShape)
+                            .background(Brush.linearGradient(listOf(RevOrange, RevRed)))
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                    ) {
+                        Text(msg.body, color = Color.White, fontSize = 15.sp)
+                    }
+                } else {
+                    Surface(
+                        shape = bubbleShape,
+                        color = Color.White,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x14000000)),
+                    ) {
+                        Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)) {
+                            Text(msg.body, color = RevBrown, fontSize = 15.sp)
+                        }
+                    }
                 }
             }
             Text(msg.created_at.substring(11, 16), color = RevTextSecondary, fontSize = 10.sp,
@@ -327,23 +350,25 @@ private fun AttachmentCard(
     size: Int?,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .width(240.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(RevCardBackground)
-            .clickable(onClick = onClick)
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    Surface(
+        modifier = Modifier.width(240.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x14000000)),
     ) {
-        Box(
-            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(tint),
-            contentAlignment = Alignment.Center,
-        ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp)) }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(name, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1)
-            Text("${type.uppercase()} · ${formatSize(size)}", color = RevTextSecondary, fontSize = 11.sp)
+        Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(tint),
+                contentAlignment = Alignment.Center,
+            ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp)) }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(name, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1)
+                Text("${type.uppercase()} · ${formatSize(size)}", color = RevTextSecondary, fontSize = 11.sp)
+            }
         }
     }
 }

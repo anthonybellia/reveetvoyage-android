@@ -10,10 +10,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,7 +27,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -79,6 +82,17 @@ class SettingsViewModel @Inject constructor(
     suspend fun uploadAvatar(bytes: ByteArray): Boolean = userRepo.uploadAvatar(bytes)
 }
 
+private val RowDividerColor = Color(0x14000000)
+
+@Composable
+private fun RowDivider() {
+    HorizontalDivider(
+        color = RowDividerColor,
+        thickness = 0.5.dp,
+        modifier = Modifier.padding(start = 56.dp),
+    )
+}
+
 // ============================================================
 // SettingsScreen — main hub
 // ============================================================
@@ -124,13 +138,13 @@ fun SettingsScreen(
             GlassCard(modifier = Modifier.fillMaxWidth(), padding = 0) {
                 Column {
                     SettingsRow(Icons.Default.Person, "Informations personnelles",
-                        "Nom, email, téléphone", RevOrange, onClick = onOpenEditProfile)
-                    Divider(modifier = Modifier.padding(start = 60.dp))
+                        "Nom, email, téléphone", onClick = onOpenEditProfile)
+                    RowDivider()
                     SettingsRow(Icons.Default.Lock, "Mot de passe",
-                        "Modifier mon mot de passe", RevRed, onClick = onOpenChangePassword)
-                    Divider(modifier = Modifier.padding(start = 60.dp))
+                        "Modifier mon mot de passe", onClick = onOpenChangePassword)
+                    RowDivider()
                     SettingsRow(Icons.Default.Email, "Mes messages",
-                        "Discussions avec l'équipe", RevYellow, onClick = onOpenMessages)
+                        "Discussions avec l'équipe", onClick = onOpenMessages)
                 }
             }
 
@@ -138,12 +152,45 @@ fun SettingsScreen(
             GlassCard(modifier = Modifier.fillMaxWidth(), padding = 0) {
                 Column {
                     SettingsRow(Icons.Default.Notifications, "Notifications",
-                        "Email + rappels voyage", RevOrange, onClick = onOpenNotifications)
-                    Divider(modifier = Modifier.padding(start = 60.dp))
+                        "Email + rappels voyage", onClick = onOpenNotifications)
+                    RowDivider()
                     val langLabel = when (user?.language) {
                         "en" -> "English"; "nl" -> "Nederlands"; else -> "Français"
                     }
-                    SettingsRow(Icons.Default.Language, "Langue", langLabel, RevOrange, onClick = onOpenLanguage)
+                    SettingsRow(Icons.Default.Language, "Langue", value = langLabel, onClick = onOpenLanguage)
+                }
+            }
+
+            // Liens utiles
+            val linksContext = androidx.compose.ui.platform.LocalContext.current
+            Text("LIENS UTILES", color = RevTextSecondary, fontSize = 11.sp,
+                 fontWeight = FontWeight.SemiBold,
+                 modifier = Modifier.padding(start = 8.dp, top = 4.dp))
+            GlassCard(modifier = Modifier.fillMaxWidth(), padding = 0) {
+                Column {
+                    SettingsRow(Icons.Default.Public, "Site web",
+                        "reveetvoyage.be",
+                        onClick = { openUrl(linksContext, "https://www.reveetvoyage.be") })
+                    RowDivider()
+                    SettingsRow(Icons.Default.Phone, "Téléphone",
+                        "+32 497 02 85 20",
+                        onClick = { openUrl(linksContext, "tel:+32497028520") })
+                    RowDivider()
+                    SettingsRow(Icons.Default.MailOutline, "Email",
+                        "contact@reveetvoyage.be",
+                        onClick = { openUrl(linksContext, "mailto:contact@reveetvoyage.be") })
+                    RowDivider()
+                    SettingsRow(Icons.Default.PhotoCamera, "Instagram",
+                        "@matilda_travelplanner",
+                        onClick = { openUrl(linksContext, "https://www.instagram.com/matilda_travelplanner") })
+                    RowDivider()
+                    SettingsRow(Icons.Default.Star, "Noter l'app",
+                        "Sur le Play Store",
+                        onClick = { openUrl(linksContext, "market://details?id=be.reveetvoyage.app") })
+                    RowDivider()
+                    SettingsRow(Icons.Default.Share, "Partager Rêve et Voyage",
+                        "Envoie l'app à un ami",
+                        onClick = { shareApp(linksContext) })
                 }
             }
 
@@ -151,34 +198,30 @@ fun SettingsScreen(
             GlassCard(modifier = Modifier.fillMaxWidth(), padding = 0) {
                 Column {
                     SettingsRow(Icons.Default.Description, "Conditions générales",
-                        "Lire les CGU", RevTextSecondary,
+                        "Lire les CGU",
                         onClick = { onOpenPage("conditions-generales", "Conditions générales") })
-                    Divider(modifier = Modifier.padding(start = 60.dp))
+                    RowDivider()
                     SettingsRow(Icons.Default.PrivacyTip, "Confidentialité",
-                        "Protection des données", RevTextSecondary,
+                        "Protection des données",
                         onClick = { onOpenPage("politique-de-confidentialite", "Confidentialité") })
-                    Divider(modifier = Modifier.padding(start = 60.dp))
+                    RowDivider()
                     SettingsRow(Icons.Default.Receipt, "Conditions de vente",
-                        "CGV applicables", RevTextSecondary,
+                        "CGV applicables",
                         onClick = { onOpenPage("conditions-de-vente", "Conditions de vente") })
-                    Divider(modifier = Modifier.padding(start = 60.dp))
+                    RowDivider()
                     SettingsRow(Icons.Default.Help, "Aide",
-                        "Contacte l'équipe Rêve et Voyage", RevTextSecondary,
+                        "Contacte l'équipe Rêve et Voyage",
                         onClick = onOpenMessages)
                 }
             }
 
             // Logout
-            Button(
+            IOSButton(
+                text = "Se déconnecter",
                 onClick = { showLogoutDialog = true },
-                colors = ButtonDefaults.buttonColors(containerColor = RevRed),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-            ) {
-                Icon(Icons.AutoMirrored.Filled.ExitToApp, null, tint = Color.White)
-                Spacer(Modifier.width(8.dp))
-                Text("Se déconnecter", color = Color.White, fontWeight = FontWeight.SemiBold)
-            }
+                style = IOSButtonStyle.Destructive,
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             Spacer(Modifier.height(16.dp))
             Text("Rêve et Voyage · v1.0", color = RevTextSecondary, fontSize = 11.sp,
@@ -188,35 +231,38 @@ fun SettingsScreen(
     }
 
     if (showLogoutDialog) {
-        AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            title = { Text("Se déconnecter ?") },
-            text = { Text("Tu devras te reconnecter pour accéder à ton compte.") },
-            confirmButton = {
-                TextButton(onClick = { showLogoutDialog = false; vm.logout(); onLogout() }) {
-                    Text("Se déconnecter", color = RevRed)
-                }
-            },
-            dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Annuler") } },
+        IOSAlertDialog(
+            title = "Se déconnecter ?",
+            message = "Tu devras te reconnecter pour accéder à ton compte.",
+            confirmText = "Se déconnecter",
+            cancelText = "Annuler",
+            isDestructive = true,
+            onConfirm = { showLogoutDialog = false; vm.logout(); onLogout() },
+            onDismiss = { showLogoutDialog = false },
         )
     }
 }
 
 @Composable
-private fun SettingsRow(icon: ImageVector, title: String, subtitle: String, color: Color, onClick: () -> Unit) {
+private fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String? = null,
+    value: String? = null,
+    onClick: () -> Unit,
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(14.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(
-            modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))
-                .background(Brush.linearGradient(listOf(color.copy(alpha = .85f), color))),
-            contentAlignment = Alignment.Center,
-        ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(16.dp)) }
+        Icon(icon, null, tint = RevOrange, modifier = Modifier.size(22.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = RevBrown, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Text(subtitle, color = RevTextSecondary, fontSize = 11.sp)
+            Text(title, color = RevBrown, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            subtitle?.let { Text(it, color = RevTextSecondary, fontSize = 11.sp) }
+        }
+        value?.let {
+            Text(it, color = RevTextSecondary, fontSize = 14.sp)
         }
         Icon(Icons.Default.ChevronRight, null, tint = RevTextSecondary.copy(alpha = .5f))
     }
@@ -225,7 +271,33 @@ private fun SettingsRow(icon: ImageVector, title: String, subtitle: String, colo
 // ============================================================
 // EditProfileScreen
 // ============================================================
-@OptIn(ExperimentalMaterial3Api::class)
+// Helpers — open url + share app
+// ============================================================
+private fun openUrl(context: android.content.Context, url: String) {
+    try {
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+        intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+        context.startActivity(intent)
+    } catch (_: Throwable) {
+        // Fallback for market:// when Play Store not installed → open web
+        if (url.startsWith("market://")) {
+            openUrl(context, "https://play.google.com/store/apps/details?id=be.reveetvoyage.app")
+        }
+    }
+}
+
+private fun shareApp(context: android.content.Context) {
+    val text = "Découvre Rêve et Voyage — l'app pour organiser tes voyages 🌴 https://www.reveetvoyage.be"
+    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_TEXT, text)
+    }
+    val chooser = android.content.Intent.createChooser(intent, "Partager")
+    chooser.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+    context.startActivity(chooser)
+}
+
+// ============================================================
 @Composable
 fun EditProfileScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel()) {
     val user by vm.currentUser.collectAsState()
@@ -260,17 +332,15 @@ fun EditProfileScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Mes informations") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
-                    }
-                },
-                actions = {
-                    TextButton(onClick = {
+    Column(
+        modifier = Modifier.fillMaxSize().background(RevBackground),
+    ) {
+        IOSTopBar(
+            title = "Mes informations",
+            onBack = onBack,
+            trailing = {
+                TextButton(
+                    onClick = {
                         saving = true
                         scope.launch {
                             vm.saveProfile(UpdateProfileRequest(
@@ -285,24 +355,34 @@ fun EditProfileScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel(
                             saving = false
                             onBack()
                         }
-                    }, enabled = !saving && prenom.isNotBlank() && nom.isNotBlank()) {
-                        if (saving) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = RevOrange)
-                        else Text("Enregistrer", fontWeight = FontWeight.Bold)
+                    },
+                    enabled = !saving && prenom.isNotBlank() && nom.isNotBlank(),
+                ) {
+                    if (saving) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = RevOrange)
+                    } else {
+                        Text("OK", color = RevOrange, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                 }
-            )
-        }
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
-               verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            },
+        )
+
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
             // Avatar
-            Row(verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
                 Box {
                     AvatarView(prenom, nom, user?.avatar, size = 70)
                     if (avatarUploading) {
-                        CircularProgressIndicator(color = RevOrange,
-                            modifier = Modifier.align(Alignment.Center))
+                        CircularProgressIndicator(
+                            color = RevOrange,
+                            modifier = Modifier.align(Alignment.Center),
+                        )
                     }
                 }
                 Column {
@@ -317,18 +397,20 @@ fun EditProfileScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel(
                 }
             }
 
-            OutlinedTextField(prenom, { prenom = it }, label = { Text("Prénom") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(nom, { nom = it }, label = { Text("Nom") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(phone, { phone = it }, label = { Text("Téléphone") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(nationalite, { nationalite = it }, label = { Text("Nationalité") }, modifier = Modifier.fillMaxWidth())
-            Divider()
+            IOSTextField(prenom, { prenom = it }, placeholder = "Prénom")
+            IOSTextField(nom, { nom = it }, placeholder = "Nom")
+            IOSTextField(phone, { phone = it }, placeholder = "Téléphone")
+            IOSTextField(nationalite, { nationalite = it }, placeholder = "Nationalité")
+
+            HorizontalDivider(color = RowDividerColor, thickness = 0.5.dp)
             Text("Adresse", fontWeight = FontWeight.SemiBold, color = RevBrown)
-            OutlinedTextField(adresse, { adresse = it }, label = { Text("Adresse") }, modifier = Modifier.fillMaxWidth())
+
+            IOSTextField(adresse, { adresse = it }, placeholder = "Adresse")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(cp, { cp = it }, label = { Text("CP") }, modifier = Modifier.width(110.dp))
-                OutlinedTextField(ville, { ville = it }, label = { Text("Ville") }, modifier = Modifier.weight(1f))
+                IOSTextField(cp, { cp = it }, placeholder = "CP", modifier = Modifier.width(110.dp))
+                IOSTextField(ville, { ville = it }, placeholder = "Ville", modifier = Modifier.weight(1f))
             }
-            OutlinedTextField(pays, { pays = it }, label = { Text("Pays") }, modifier = Modifier.fillMaxWidth())
+            IOSTextField(pays, { pays = it }, placeholder = "Pays")
             Spacer(Modifier.height(20.dp))
         }
     }
@@ -337,7 +419,6 @@ fun EditProfileScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel(
 // ============================================================
 // ChangePasswordScreen
 // ============================================================
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChangePasswordScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel()) {
     var current by remember { mutableStateOf("") }
@@ -349,26 +430,21 @@ fun ChangePasswordScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewMod
     val scope = rememberCoroutineScope()
     val isValid = current.isNotEmpty() && newPwd.length >= 8 && newPwd == confirm
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Mot de passe") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } }
-            )
-        }
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(20.dp),
-               verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            OutlinedTextField(current, { current = it }, label = { Text("Mot de passe actuel") },
-                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(newPwd, { newPwd = it }, label = { Text("Nouveau (min 8)") },
-                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(confirm, { confirm = it }, label = { Text("Confirmer") },
-                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+    Column(modifier = Modifier.fillMaxSize().background(RevBackground)) {
+        IOSTopBar(title = "Mot de passe", onBack = onBack)
+
+        Column(
+            modifier = Modifier.fillMaxSize().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            IOSTextField(current, { current = it }, placeholder = "Mot de passe actuel", isPassword = true)
+            IOSTextField(newPwd, { newPwd = it }, placeholder = "Nouveau (min 8)", isPassword = true)
+            IOSTextField(confirm, { confirm = it }, placeholder = "Confirmer", isPassword = true)
 
             msg?.let { Text(it, color = if (success) Color(0xFF2E7D32) else RevRed, fontSize = 12.sp) }
 
-            Button(
+            IOSButton(
+                text = "Mettre à jour",
                 onClick = {
                     saving = true
                     scope.launch {
@@ -378,14 +454,11 @@ fun ChangePasswordScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewMod
                         if (ok) { kotlinx.coroutines.delay(1000); onBack() }
                     }
                 },
+                style = IOSButtonStyle.Primary,
+                isLoading = saving,
                 enabled = !saving && isValid,
-                colors = ButtonDefaults.buttonColors(containerColor = RevOrange),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-            ) {
-                if (saving) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                else Text("Mettre à jour", color = Color.White, fontWeight = FontWeight.SemiBold)
-            }
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -393,7 +466,6 @@ fun ChangePasswordScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewMod
 // ============================================================
 // LanguageScreen
 // ============================================================
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LanguageScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel()) {
     val user by vm.currentUser.collectAsState()
@@ -404,16 +476,13 @@ fun LanguageScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel()) 
         Triple("nl", "Nederlands", "🇳🇱"),
     )
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Langue") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } }
-            )
-        }
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(20.dp),
-               verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(RevBackground)) {
+        IOSTopBar(title = "Langue", onBack = onBack)
+
+        Column(
+            modifier = Modifier.fillMaxSize().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             languages.forEach { (code, label, flag) ->
                 val selected = user?.language == code
                 GlassCard(modifier = Modifier.fillMaxWidth().clickable {
@@ -438,7 +507,6 @@ fun LanguageScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel()) 
 // ============================================================
 // NotificationsSettingsScreen
 // ============================================================
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationsSettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel()) {
     val user by vm.currentUser.collectAsState()
@@ -463,45 +531,63 @@ fun NotificationsSettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = hilt
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Notifications") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } }
-            )
-        }
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(20.dp),
-               verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            NotifToggle(Icons.Default.Email, "Emails généraux", "Comptes, sécurité, factures",
-                notifEmails) { notifEmails = it; persist() }
-            NotifToggle(Icons.Default.Sell, "Emails promotionnels", "Bons plans, offres, newsletter",
-                notifPromo) { notifPromo = it; persist() }
-            NotifToggle(Icons.Default.Flight, "Notifications voyage", "Rappels J-15, J-7, J-2 et J-1",
-                notifVoyages) { notifVoyages = it; persist() }
+    Column(modifier = Modifier.fillMaxSize().background(RevBackground)) {
+        IOSTopBar(title = "Notifications", onBack = onBack)
+
+        Column(
+            modifier = Modifier.fillMaxSize().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            GlassCard(modifier = Modifier.fillMaxWidth(), padding = 0) {
+                Column {
+                    NotifToggleRow(Icons.Default.Email, "Emails généraux", "Comptes, sécurité, factures",
+                        notifEmails) { notifEmails = it; persist() }
+                    HorizontalDivider(color = RowDividerColor, thickness = 0.5.dp,
+                        modifier = Modifier.padding(start = 52.dp))
+                    NotifToggleRow(Icons.Default.Sell, "Emails promotionnels", "Bons plans, offres, newsletter",
+                        notifPromo) { notifPromo = it; persist() }
+                    HorizontalDivider(color = RowDividerColor, thickness = 0.5.dp,
+                        modifier = Modifier.padding(start = 52.dp))
+                    NotifToggleRow(Icons.Default.Flight, "Notifications voyage", "Rappels J-15, J-7, J-2 et J-1",
+                        notifVoyages) { notifVoyages = it; persist() }
+                }
+            }
 
             Spacer(Modifier.height(8.dp))
-            Text("Rappels Ryanair-style 15j / 7j / 48h / 24h avant le départ avec heure idéale d'arrivée à l'aéroport.",
-                 color = RevTextSecondary, fontSize = 12.sp)
+            Text(
+                "Rappels Ryanair-style 15j / 7j / 48h / 24h avant le départ avec heure idéale d'arrivée à l'aéroport.",
+                color = RevTextSecondary, fontSize = 12.sp,
+            )
         }
     }
 }
 
 @Composable
-private fun NotifToggle(icon: ImageVector, title: String, subtitle: String,
-                        value: Boolean, onChange: (Boolean) -> Unit) {
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(icon, null, tint = RevOrange, modifier = Modifier.size(22.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                Text(subtitle, color = RevTextSecondary, fontSize = 11.sp)
-            }
-            Switch(checked = value, onCheckedChange = onChange,
-                colors = SwitchDefaults.colors(checkedThumbColor = RevOrange,
-                    checkedTrackColor = RevOrange.copy(alpha = .3f)))
+private fun NotifToggleRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    value: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(icon, null, tint = RevOrange, modifier = Modifier.size(22.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Text(subtitle, color = RevTextSecondary, fontSize = 11.sp)
         }
+        Switch(
+            checked = value,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = RevOrange,
+            ),
+        )
     }
 }
 
@@ -518,23 +604,22 @@ class NotificationsScreenViewModel @Inject constructor(
     init { viewModelScope.launch { _unread.value = runCatching { msgRepo.unreadCount() }.getOrDefault(0) } }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotificationsScreen(onBack: () -> Unit, onOpenMessages: () -> Unit,
-                        vm: NotificationsScreenViewModel = hiltViewModel()) {
+fun NotificationsScreen(
+    onBack: () -> Unit,
+    onOpenMessages: () -> Unit,
+    vm: NotificationsScreenViewModel = hiltViewModel(),
+) {
     val unread by vm.unread.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Notifications") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } }
+    Column(modifier = Modifier.fillMaxSize().background(RevBackground)) {
+        IOSTopBar(title = "Notifications", onBack = onBack)
+
+        Box(
+            modifier = Modifier.fillMaxSize().background(
+                Brush.verticalGradient(listOf(RevYellow.copy(alpha = .06f), RevBackground))
             )
-        }
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding).background(
-            Brush.verticalGradient(listOf(RevYellow.copy(alpha = .06f), RevBackground))
-        )) {
+        ) {
             if (unread == 0) {
                 EmptyState(Icons.Default.NotificationsOff, "Aucune notification",
                     "On te préviendra dès qu'il y aura du nouveau.")

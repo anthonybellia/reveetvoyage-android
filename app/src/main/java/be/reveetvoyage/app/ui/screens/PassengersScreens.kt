@@ -6,15 +6,24 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -77,6 +86,7 @@ fun PassengersScreen(vm: PassengersViewModel = hiltViewModel()) {
     val isLoading by vm.isLoading.collectAsState()
     var showSheet by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Passenger?>(null) }
+    var pendingDelete by remember { mutableStateOf<Passenger?>(null) }
     val scope = rememberCoroutineScope()
 
     Box(
@@ -100,15 +110,12 @@ fun PassengersScreen(vm: PassengersViewModel = hiltViewModel()) {
                     Text("Ajoute des passagers pour gagner du temps lors d'un devis",
                          color = RevTextSecondary, fontSize = 13.sp)
                     Spacer(Modifier.height(16.dp))
-                    Button(
+                    IOSButton(
+                        text = "Ajouter un passager",
                         onClick = { editing = null; showSheet = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = RevOrange),
-                        shape = RoundedCornerShape(14.dp),
-                    ) {
-                        Icon(Icons.Default.Add, null, tint = Color.White)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Ajouter un passager", color = Color.White)
-                    }
+                        icon = Icons.Default.Add,
+                        style = IOSButtonStyle.Primary,
+                    )
                 }
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -119,24 +126,32 @@ fun PassengersScreen(vm: PassengersViewModel = hiltViewModel()) {
                         PassengerCard(
                             p,
                             onTap = { editing = p; showSheet = true },
-                            onDelete = { scope.launch { vm.delete(p.id) } }
+                            onDelete = { pendingDelete = p }
                         )
                     }
                 }
             }
 
-            FloatingActionButton(
-                onClick = { editing = null; showSheet = true },
-                containerColor = RevOrange,
-                contentColor = Color.White,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
-            ) { Icon(Icons.Default.Add, null) }
+            // iOS-style floating add button (orange circle, white plus)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(20.dp)
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(RevOrange, RevRed)))
+                    .clickable { editing = null; showSheet = true },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.Add, null, tint = Color.White)
+            }
         }
 
         if (showSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showSheet = false },
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = RevCardBackground,
             ) {
                 PassengerForm(
                     initial = editing,
@@ -147,6 +162,21 @@ fun PassengersScreen(vm: PassengersViewModel = hiltViewModel()) {
                     },
                 )
             }
+        }
+
+        pendingDelete?.let { p ->
+            IOSAlertDialog(
+                title = "Supprimer ce passager ?",
+                message = "${p.full_name} sera retiré de tes passagers enregistrés.",
+                confirmText = "Supprimer",
+                cancelText = "Annuler",
+                isDestructive = true,
+                onConfirm = {
+                    scope.launch { vm.delete(p.id) }
+                    pendingDelete = null
+                },
+                onDismiss = { pendingDelete = null },
+            )
         }
     }
 }
@@ -177,7 +207,6 @@ private fun PassengerCard(p: Passenger, onTap: () -> Unit, onDelete: () -> Unit)
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PassengerForm(
     initial: Passenger?,
@@ -198,36 +227,50 @@ private fun PassengerForm(
         modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(if (initial == null) "Nouveau passager" else "Modifier",
-             fontWeight = FontWeight.Bold, fontSize = 18.sp, color = RevBrown)
+        Text(
+            if (initial == null) "Nouveau passager" else "Modifier",
+            fontWeight = FontWeight.Bold, fontSize = 18.sp, color = RevBrown,
+        )
 
-        OutlinedTextField(prenom, { prenom = it }, label = { Text("Prénom") },
-            shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
-        OutlinedTextField(nom, { nom = it }, label = { Text("Nom") },
-            shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
-        OutlinedTextField(nationalite, { nationalite = it }, label = { Text("Nationalité") },
-            shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(typeDoc, { typeDoc = it },
-            label = { Text("Type de document (passeport / carte_identite)") },
-            shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(numDoc, { numDoc = it }, label = { Text("Numéro document") },
-            shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(notes, { notes = it }, label = { Text("Notes") },
-            shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth())
+        IOSTextField(
+            value = prenom,
+            onValueChange = { prenom = it },
+            placeholder = "Prénom",
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+        )
+        IOSTextField(
+            value = nom,
+            onValueChange = { nom = it },
+            placeholder = "Nom",
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+        )
+        IOSTextField(nationalite, { nationalite = it }, placeholder = "Nationalité")
+        IOSTextField(typeDoc, { typeDoc = it }, placeholder = "Type de document (passeport / carte_identite)")
+        IOSTextField(numDoc, { numDoc = it }, placeholder = "Numéro document")
+        IOSTextField(notes, { notes = it }, placeholder = "Notes")
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = isDefault, onCheckedChange = { isDefault = it },
-                colors = SwitchDefaults.colors(checkedThumbColor = RevOrange))
+            Switch(
+                checked = isDefault,
+                onCheckedChange = { isDefault = it },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = RevOrange,
+                ),
+            )
             Spacer(Modifier.width(8.dp))
             Text("Passager principal", color = RevBrown)
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
-            OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(14.dp)) { Text("Annuler") }
-            Button(
+            IOSButton(
+                text = "Annuler",
+                onClick = onCancel,
+                style = IOSButtonStyle.Secondary,
+                modifier = Modifier.weight(1f),
+            )
+            IOSButton(
+                text = "Enregistrer",
                 onClick = {
                     saving = true
                     scope.launch {
@@ -242,14 +285,11 @@ private fun PassengerForm(
                         saving = false
                     }
                 },
+                style = IOSButtonStyle.Primary,
+                isLoading = saving,
                 enabled = !saving && prenom.isNotBlank() && nom.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = RevOrange),
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.weight(1f),
-            ) {
-                if (saving) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp,
-                    modifier = Modifier.size(20.dp))
-                else Text("Enregistrer", color = Color.White)
-            }
+                modifier = Modifier.weight(1f),
+            )
         }
         Spacer(Modifier.height(20.dp))
     }

@@ -9,7 +9,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,11 +76,24 @@ fun HomeScreen(
     onOpenNewVoyageRequest: () -> Unit,
     onOpenPassengers: () -> Unit,
     vm: HomeViewModel = hiltViewModel(),
+    weatherVm: be.reveetvoyage.app.ui.components.WeatherViewModel = hiltViewModel(),
 ) {
     val voyages by vm.voyages.collectAsState()
     val devis by vm.devis.collectAsState()
     val unread by vm.unread.collectAsState()
     val user by vm.currentUser.collectAsState()
+    val weather by weatherVm.weather.collectAsState()
+    val weatherLoading by weatherVm.loading.collectAsState()
+    val locationLabel by weatherVm.locationLabel.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    LaunchedEffect(Unit) {
+        val pos = be.reveetvoyage.app.ui.components.LocationHelper.lastKnownLocation(context)
+            ?: Pair(50.8503, 4.3517) // fallback: Brussels
+        val label = be.reveetvoyage.app.ui.components.reverseGeocodeCity(context, pos.first, pos.second)
+            ?: "Belgique"
+        weatherVm.load(pos.first, pos.second, label)
+    }
 
     Box(
         modifier = Modifier.fillMaxSize().background(
@@ -88,9 +102,14 @@ fun HomeScreen(
     ) {
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             HeroHeader(user, unread, onOpenNotifications)
+            be.reveetvoyage.app.ui.components.WeatherCard(
+                weather = weather,
+                locationLabel = locationLabel,
+                isLoading = weatherLoading,
+            )
             QuickActions(
                 onNewVoyage = onOpenNewVoyageRequest,
                 onPassengers = onOpenPassengers,

@@ -111,10 +111,14 @@ data class VoyageEtape(
     val compagnie: String? = null,
     val numero_ref: String? = null,
     val cout: Double? = null,
+    val image: String? = null,
+    val fichier: String? = null,
+    val images: List<String> = emptyList(),
     val is_completed: Boolean = false,
     val completed_at: String? = null,
 ) {
     val hasCoordinates: Boolean get() = latitude != null && longitude != null
+    val hasAttachments: Boolean get() = image != null || fichier != null || images.isNotEmpty()
 }
 
 @Serializable
@@ -204,4 +208,134 @@ data class PageResponse(
     val content_html: String,
     val meta_description: String? = null,
     val updated_at: String? = null,
+)
+
+// ===== Weather =====
+@Serializable
+data class WeatherResponse(
+    val timezone: String? = null,
+    val current: WeatherCurrent? = null,
+    val forecast: List<WeatherDay> = emptyList(),
+)
+
+@Serializable
+data class WeatherCurrent(
+    val temp: Double? = null,
+    val feels_like: Double? = null,
+    val code: Int? = null,
+    val wind: Double? = null,
+    val humidity: Double? = null,
+    val is_day: Boolean = true,
+)
+
+@Serializable
+data class WeatherDay(
+    val date: String,
+    val temp_max: Double? = null,
+    val temp_min: Double? = null,
+    val code: Int? = null,
+    val precip_prob: Int? = null,
+)
+
+// ===== Voyage Expenses (Tricount-like) =====
+
+@Serializable
+data class VoyageParticipant(
+    val id: Int,
+    val voyage_id: Int,
+    val user_id: Int? = null,
+    val display_name: String,
+    val is_guest: Boolean = false,
+)
+
+@Serializable
+data class VoyageExpenseSplit(
+    val participant_id: Int,
+    val share_weight: Double = 1.0,
+)
+
+@Serializable
+data class ExpensePaidBy(
+    val id: Int,
+    val display_name: String,
+)
+
+@Serializable
+data class VoyageExpense(
+    val id: Int,
+    val voyage_id: Int,
+    val paid_by_participant_id: Int,
+    val title: String,
+    val amount_cents: Long,
+    val currency: String = "EUR",
+    val category: String = "autre",
+    val spent_at: String? = null,
+    val description: String? = null,
+    val splits: List<VoyageExpenseSplit> = emptyList(),
+    val paid_by: ExpensePaidBy? = null,
+    val location_name: String? = null,
+    val location_latitude: Double? = null,
+    val location_longitude: Double? = null,
+) {
+    val amount: Double get() = amount_cents / 100.0
+}
+
+@Serializable
+data class Place(
+    val name: String,
+    val address: String,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val type: String? = null,
+)
+
+@Serializable
+data class SettlementBalance(
+    val participant_id: Int,
+    val name: String,
+    val balance_cents: Long,
+) {
+    val balance: Double get() = balance_cents / 100.0
+}
+
+@Serializable
+data class SettlementTransaction(
+    val from_participant_id: Int,
+    val from_name: String,
+    val to_participant_id: Int,
+    val to_name: String,
+    val amount_cents: Long,
+) {
+    val amount: Double get() = amount_cents / 100.0
+}
+
+@Serializable
+data class SettlementResponse(
+    val balances: List<SettlementBalance> = emptyList(),
+    val transactions: List<SettlementTransaction> = emptyList(),
+    val total_cents: Long = 0,
+    val by_category: Map<String, Long> = emptyMap(),
+) {
+    val total: Double get() = total_cents / 100.0
+}
+
+@Serializable
+data class CreateParticipantRequest(
+    val display_name: String? = null,
+    val email: String? = null,
+)
+
+@Serializable
+data class CreateExpenseRequest(
+    val title: String,
+    val amount: Double,
+    val currency: String? = null,
+    val paid_by_participant_id: Int,
+    val spent_at: String? = null,
+    val description: String? = null,
+    val category: String? = null,
+    val splits: List<VoyageExpenseSplit>? = null,
+    val location_name: String? = null,
+    val location_latitude: Double? = null,
+    val location_longitude: Double? = null,
 )

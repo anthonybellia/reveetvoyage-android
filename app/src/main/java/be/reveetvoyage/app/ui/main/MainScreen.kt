@@ -1,23 +1,49 @@
 package be.reveetvoyage.app.ui.main
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import be.reveetvoyage.app.ui.screens.*
+import be.reveetvoyage.app.ui.screens.expenses.ExpensesScreen
 import be.reveetvoyage.app.ui.theme.RevOrange
+import be.reveetvoyage.app.ui.theme.RevTextSecondary
 
 private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
     Home("home", "Accueil", Icons.Default.Home),
@@ -30,6 +56,72 @@ private enum class Tab(val route: String, val label: String, val icon: ImageVect
 private val tabRoutes = Tab.values().map { it.route }.toSet()
 
 @Composable
+private fun IOSTabBar(
+    currentRoute: String?,
+    onSelect: (Tab) -> Unit,
+) {
+    val hairline = Color(0x14000000)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .drawBehind {
+                val strokePx = 0.5.dp.toPx()
+                drawLine(
+                    color = hairline,
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width, 0f),
+                    strokeWidth = strokePx,
+                )
+            }
+            .navigationBarsPadding()
+            .padding(top = 6.dp, bottom = 6.dp),
+    ) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(50.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        Tab.values().forEach { tab ->
+            val selected = currentRoute == tab.route
+            val tint = if (selected) RevOrange else RevTextSecondary
+            val interaction = remember { MutableInteractionSource() }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clickable(
+                        interactionSource = interaction,
+                        indication = null,
+                    ) { onSelect(tab) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        imageVector = tab.icon,
+                        contentDescription = tab.label,
+                        tint = tint,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Text(
+                        text = tab.label,
+                        color = tint,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+        }
+    }
+    }
+}
+
+@Composable
 fun MainScreen(onLogout: () -> Unit) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
@@ -39,29 +131,18 @@ fun MainScreen(onLogout: () -> Unit) {
         bottomBar = {
             // Hide bottom bar on detail / sub-screens
             if (currentRoute in tabRoutes) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    Tab.values().forEach { tab ->
-                        NavigationBarItem(
-                            selected = currentRoute == tab.route,
-                            onClick = {
-                                if (currentRoute != tab.route) {
-                                    navController.navigate(tab.route) {
-                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            icon = { Icon(tab.icon, null) },
-                            label = { Text(tab.label) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = RevOrange,
-                                selectedTextColor = RevOrange,
-                                indicatorColor = RevOrange.copy(alpha = 0.12f),
-                            )
-                        )
-                    }
-                }
+                IOSTabBar(
+                    currentRoute = currentRoute,
+                    onSelect = { tab ->
+                        if (currentRoute != tab.route) {
+                            navController.navigate(tab.route) {
+                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    },
+                )
             }
         }
     ) { padding ->
@@ -122,6 +203,14 @@ fun MainScreen(onLogout: () -> Unit) {
                     voyageId = id,
                     onBack = { navController.popBackStack() },
                     onOpenEtape = { etapeId -> navController.navigate("voyage/$id/etape/$etapeId") },
+                    onOpenExpenses = { vId -> navController.navigate("expenses/$vId") },
+                )
+            }
+            composable("expenses/{voyageId}") { entry ->
+                val voyageId = entry.arguments?.getString("voyageId")?.toIntOrNull() ?: 0
+                ExpensesScreen(
+                    voyageId = voyageId,
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable("voyage/{voyageId}/etape/{etapeId}") { entry ->

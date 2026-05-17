@@ -64,9 +64,9 @@ data class DevisDraft(
  * Payload envoyé à POST /api/devis. Tous nullable côté backend ; le serveur
  * autofille nom/email/téléphone à partir de l'utilisateur authentifié.
  *
- * NB : on omet volontairement `type_voyage` (enum strict couple/famille/...)
- * car le quiz natif ne le demande pas explicitement et l'envoyer vide
- * déclencherait une erreur de validation.
+ * `type_voyage` est une ENUM stricte côté DB (couple|famille|amis|solo|lune_de_miel) ;
+ * on envoie "couple" comme défaut sûr puisque le quiz natif ne demande pas
+ * explicitement la composition du groupe (les chips Voyageurs capturent juste le nombre).
  */
 @Serializable
 data class CreateDevisRequest(
@@ -75,7 +75,7 @@ data class CreateDevisRequest(
     val dates_souhaitees: String? = null,
     val flexible_dates: String? = null,
     val duree: String? = null,
-    val nb_personnes: String? = null,
+    val nb_personnes: Int? = null,
     val participants: String? = null,
     val lieu_depart: String? = null,
     val preferences_horaires: String? = null,
@@ -88,6 +88,7 @@ data class CreateDevisRequest(
     val imperatifs: String? = null,
     val evenement: String? = null,
     val budget: String? = null,
+    val type_voyage: String = "couple",
     val message: String? = null,
 )
 
@@ -97,7 +98,7 @@ fun DevisDraft.toRequest(): CreateDevisRequest = CreateDevisRequest(
     dates_souhaitees = datesSouhaitees.trim().ifBlank { null },
     flexible_dates = if (flexibleDates) "1" else null,
     duree = duree.trim().ifBlank { null },
-    nb_personnes = nbPersonnes.trim().ifBlank { null },
+    nb_personnes = nbPersonnes.trim().removeSuffix("+").toIntOrNull(),
     participants = participants.trim().ifBlank { null },
     lieu_depart = lieuDepart.trim().ifBlank { null },
     preferences_horaires = null,
@@ -110,6 +111,7 @@ fun DevisDraft.toRequest(): CreateDevisRequest = CreateDevisRequest(
     imperatifs = imperatifs.trim().ifBlank { null },
     evenement = evenement.trim().ifBlank { null },
     budget = budget.trim().ifBlank { null },
+    type_voyage = "couple",
     message = message.trim().ifBlank { null },
 )
 

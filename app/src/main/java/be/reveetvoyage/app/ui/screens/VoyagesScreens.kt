@@ -177,7 +177,7 @@ fun VoyageCard(v: Voyage, onClick: () -> Unit) {
                 Text(v.titre, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 Text(v.destination, color = RevTextSecondary, fontSize = 12.sp)
                 // Admin-only owner row (no-op until Voyage.owner lands in data/model/Models.kt).
-                OwnerRow(owner = null)
+                OwnerRow(owner = v.owner)
             }
             StatusBadge(v.statut_label, voyageStatutKind(v.statut))
             Icon(Icons.Default.ChevronRight, null, tint = RevTextSecondary.copy(alpha = .5f))
@@ -510,6 +510,7 @@ private fun HeaderCard(v: Voyage) {
                 }
                 StatusBadge(v.statut_label, voyageStatutKind(v.statut))
             }
+            OwnerRow(owner = v.owner)
             if (v.date_depart != null || v.date_retour != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     DateChip("Départ", v.date_depart, Icons.Default.FlightTakeoff)

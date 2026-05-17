@@ -124,7 +124,7 @@ private fun DevisCard(d: Devis) {
                         }
                     }
                     // Admin-only owner row (no-op until Devis.owner lands in data/model/Models.kt).
-                    OwnerRow(owner = null)
+                    OwnerRow(owner = d.owner)
                 }
                 StatusBadge(statutLabel, statutKind)
             }

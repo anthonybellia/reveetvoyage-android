@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import be.reveetvoyage.app.data.model.ApiOwner
 import be.reveetvoyage.app.ui.theme.RevBrown
 import be.reveetvoyage.app.ui.theme.RevYellow
 

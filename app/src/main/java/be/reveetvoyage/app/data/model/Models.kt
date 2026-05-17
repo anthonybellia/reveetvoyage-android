@@ -75,6 +75,17 @@ data class UpdatePreferencesRequest(
 )
 
 @Serializable
+data class ApiOwner(
+    val id: Int,
+    val prenom: String? = null,
+    val nom: String? = null,
+    val email: String? = null,
+    val phone: String? = null,
+) {
+    val fullName: String get() = listOfNotNull(prenom, nom).joinToString(" ").trim()
+}
+
+@Serializable
 data class Voyage(
     val id: Int,
     val reference: String,
@@ -91,6 +102,7 @@ data class Voyage(
     val participants: List<String>? = null,
     val token: String? = null,
     val etapes: List<VoyageEtape>? = null,
+    val owner: ApiOwner? = null,
 )
 
 @Serializable
@@ -139,6 +151,7 @@ data class Devis(
     val cadre: String? = null,
     val hebergement: String? = null,
     val activites: String? = null,
+    val owner: ApiOwner? = null,
 )
 
 @Serializable

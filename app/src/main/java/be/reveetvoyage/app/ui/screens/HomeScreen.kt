@@ -252,7 +252,7 @@ private fun DevisRowMini(d: Devis) {
                          color = RevTextSecondary, fontSize = 11.sp)
                 }
                 // Admin-only owner sub-row (always null until Devis.owner is added to data/model).
-                OwnerRow(owner = null)
+                OwnerRow(owner = d.owner)
             }
             StatusBadge(label, kind)
         }

@@ -146,7 +146,7 @@ private fun DevisWizardContent(
                         ) {
                             when (WizardStep.fromIndex(idx)) {
                                 WizardStep.Identite -> Step1IdentiteScreen(draft, user, vm::update)
-                                WizardStep.Voyageurs -> Step2VoyageursScreen(draft, vm::update)
+                                WizardStep.Voyageurs -> Step2VoyageursScreen(draft, vm)
                                 WizardStep.Dates -> Step3DatesScreen(draft, vm::update)
                                 WizardStep.Destination -> Step4DestinationScreen(draft, vm)
                                 WizardStep.Sejour -> Step5SejourScreen(draft, vm::update)

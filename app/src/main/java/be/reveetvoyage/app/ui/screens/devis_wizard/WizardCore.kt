@@ -14,15 +14,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -212,7 +204,6 @@ sealed class SubmitState {
 // ViewModel
 // =============================================================
 
-@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class DevisWizardViewModel @Inject constructor(
     private val api: DevisWizardApi,
@@ -239,13 +230,6 @@ class DevisWizardViewModel @Inject constructor(
     private val _passengerCreateError = MutableStateFlow<String?>(null)
     val passengerCreateError: StateFlow<String?> = _passengerCreateError.asStateFlow()
 
-    // Airport autocomplete — debounced 300ms (utilisé uniquement par le legacy single-field si encore branché)
-    private val _airportQuery = MutableStateFlow("")
-    private val _airportResults = MutableStateFlow<List<Airport>>(emptyList())
-    val airportResults: StateFlow<List<Airport>> = _airportResults.asStateFlow()
-    private val _airportLoading = MutableStateFlow(false)
-    val airportLoading: StateFlow<Boolean> = _airportLoading.asStateFlow()
-
     init {
         // Refresh user once at wizard open
         viewModelScope.launch { userRepo.refresh() }
@@ -262,30 +246,6 @@ class DevisWizardViewModel @Inject constructor(
                 }
             }
         }
-
-        // Airport search pipeline
-        _airportQuery
-            .debounce(300)
-            .distinctUntilChanged()
-            .onEach { q ->
-                if (q.length < 2) {
-                    _airportResults.value = emptyList()
-                    _airportLoading.value = false
-                }
-            }
-            .filter { it.length >= 2 }
-            .flatMapLatest { q ->
-                flow {
-                    _airportLoading.value = true
-                    val res = runCatching { api.searchAirports(q) }.getOrDefault(emptyList())
-                    emit(res)
-                }
-            }
-            .onEach {
-                _airportResults.value = it
-                _airportLoading.value = false
-            }
-            .launchIn(viewModelScope)
     }
 
     // ---------- Step navigation ----------
@@ -369,16 +329,6 @@ class DevisWizardViewModel @Inject constructor(
     /** Appel direct API (pas de debounce VM) — chaque AirportMultiSelector gère son propre debounce local. */
     suspend fun searchAirportsImmediate(q: String): List<Airport> =
         runCatching { api.searchAirports(q) }.getOrDefault(emptyList())
-
-    // ---------- Airport autocomplete (legacy single-field) ----------
-    fun queryAirports(q: String) {
-        _airportQuery.value = q
-    }
-
-    fun clearAirportResults() {
-        _airportQuery.value = ""
-        _airportResults.value = emptyList()
-    }
 
     // ---------- Submit ----------
     fun submit() {

@@ -192,6 +192,10 @@ fun SettingsScreen(
                         "eSIM data internationale",
                         onClick = { openUrl(linksContext, "https://www.holafly.com/?ref=reveetvoyage") })
                     RowDivider()
+                    SettingsRow(Icons.Default.RateReview, "Avis Google",
+                        "Laisse-nous un avis",
+                        onClick = { openUrl(linksContext, "https://share.google/FYbXWUrKluGlWeJ9N") })
+                    RowDivider()
                     SettingsRow(Icons.Default.Star, "Noter l'app",
                         "Sur le Play Store",
                         onClick = { openUrl(linksContext, "market://details?id=be.reveetvoyage.app") })

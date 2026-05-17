@@ -592,23 +592,11 @@ private fun PickerRow(
                 modifier = Modifier
                     .size(24.dp)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(if (checked) RevOrange else Color.Transparent)
-                    .then(
-                        if (!checked) {
-                            Modifier.background(Color.Transparent).clip(RoundedCornerShape(6.dp))
-                        } else Modifier
-                    ),
+                    .background(if (checked) RevOrange else Color(0x14000000)),
                 contentAlignment = Alignment.Center,
             ) {
                 if (checked) {
                     Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clip(RoundedCornerShape(5.dp))
-                            .background(Color(0x14000000)),
-                    )
                 }
             }
         }

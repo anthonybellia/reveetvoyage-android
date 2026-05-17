@@ -998,7 +998,7 @@ fun Step5SejourScreen(
         },
     )
 
-    WizardSectionLabel("Type d'hébergement")
+    WizardSectionLabel("Type(s) d'hébergement", "Plusieurs choix possibles")
     val hebergements = listOf(
         Triple("Hôtel", Icons.Default.Hotel, RevOrange),
         Triple("Riad", Icons.Default.Apartment, Color(0xFFB07A3B)),
@@ -1013,10 +1013,11 @@ fun Step5SejourScreen(
                 row.forEach { (label, icon, color) ->
                     SelectableCard(
                         title = label,
-                        selected = draft.hebergement == label,
+                        selected = draft.hebergement.contains(label),
                         onClick = {
                             onUpdate {
-                                it.copy(hebergement = if (it.hebergement == label) "" else label)
+                                val newSet = if (it.hebergement.contains(label)) it.hebergement - label else it.hebergement + label
+                                it.copy(hebergement = newSet)
                             }
                         },
                         icon = icon,

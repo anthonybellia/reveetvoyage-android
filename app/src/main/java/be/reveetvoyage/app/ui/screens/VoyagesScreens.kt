@@ -36,10 +36,14 @@ import kotlin.random.Random
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import be.reveetvoyage.app.data.model.User
 import be.reveetvoyage.app.data.model.Voyage
 import be.reveetvoyage.app.data.model.VoyageEtape
+import be.reveetvoyage.app.data.repo.UserRepository
 import be.reveetvoyage.app.data.repo.VoyageRepository
 import be.reveetvoyage.app.ui.components.*
+import be.reveetvoyage.app.ui.screens.admin.AdminBanner
+import be.reveetvoyage.app.ui.screens.admin.OwnerRow
 import be.reveetvoyage.app.ui.theme.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,11 +56,15 @@ import javax.inject.Inject
 // VoyagesScreen — list with filter chips (All/Upcoming/Past)
 // ============================================================
 @HiltViewModel
-class VoyagesViewModel @Inject constructor(private val repo: VoyageRepository) : ViewModel() {
+class VoyagesViewModel @Inject constructor(
+    private val repo: VoyageRepository,
+    userRepo: UserRepository,
+) : ViewModel() {
     private val _voyages = MutableStateFlow<List<Voyage>>(emptyList())
     val voyages: StateFlow<List<Voyage>> = _voyages.asStateFlow()
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    val currentUser: StateFlow<User?> = userRepo.currentUser
 
     init { reload() }
 
@@ -82,6 +90,7 @@ private enum class VoyageFilter(val label: String) {
 fun VoyagesScreen(onOpenVoyage: (Int) -> Unit, vm: VoyagesViewModel = hiltViewModel()) {
     val voyages by vm.voyages.collectAsState()
     val isLoading by vm.isLoading.collectAsState()
+    val user by vm.currentUser.collectAsState()
     var filter by remember { mutableStateOf(VoyageFilter.All) }
 
     Box(
@@ -90,6 +99,11 @@ fun VoyagesScreen(onOpenVoyage: (Int) -> Unit, vm: VoyagesViewModel = hiltViewMo
             .background(Brush.linearGradient(listOf(RevYellow.copy(alpha = .08f), RevBackground)))
     ) {
         Column(modifier = Modifier.fillMaxSize().padding(top = 16.dp)) {
+            if (user?.role == "admin") {
+                Box(modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp)) {
+                    AdminBanner()
+                }
+            }
             // Filter chips
             Row(
                 modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp),
@@ -162,6 +176,8 @@ fun VoyageCard(v: Voyage, onClick: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(v.titre, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 Text(v.destination, color = RevTextSecondary, fontSize = 12.sp)
+                // Admin-only owner row (no-op until Voyage.owner lands in data/model/Models.kt).
+                OwnerRow(owner = null)
             }
             StatusBadge(v.statut_label, voyageStatutKind(v.statut))
             Icon(Icons.Default.ChevronRight, null, tint = RevTextSecondary.copy(alpha = .5f))

@@ -21,8 +21,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import be.reveetvoyage.app.data.model.Devis
+import be.reveetvoyage.app.data.model.User
 import be.reveetvoyage.app.data.repo.DevisRepository
+import be.reveetvoyage.app.data.repo.UserRepository
 import be.reveetvoyage.app.ui.components.*
+import be.reveetvoyage.app.ui.screens.admin.AdminBanner
+import be.reveetvoyage.app.ui.screens.admin.OwnerRow
 import be.reveetvoyage.app.ui.theme.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,11 +36,15 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class DevisViewModel @Inject constructor(private val repo: DevisRepository) : ViewModel() {
+class DevisViewModel @Inject constructor(
+    private val repo: DevisRepository,
+    userRepo: UserRepository,
+) : ViewModel() {
     private val _devis = MutableStateFlow<List<Devis>>(emptyList())
     val devis: StateFlow<List<Devis>> = _devis.asStateFlow()
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    val currentUser: StateFlow<User?> = userRepo.currentUser
 
     init { reload() }
 
@@ -53,6 +61,7 @@ class DevisViewModel @Inject constructor(private val repo: DevisRepository) : Vi
 fun DevisScreen(vm: DevisViewModel = hiltViewModel()) {
     val devis by vm.devis.collectAsState()
     val isLoading by vm.isLoading.collectAsState()
+    val user by vm.currentUser.collectAsState()
 
     val pending = devis.filter { it.statut in listOf("nouveau", "en_cours") }
     val validated = devis.filter { it.statut == "valide" }
@@ -75,6 +84,9 @@ fun DevisScreen(vm: DevisViewModel = hiltViewModel()) {
                     modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
+                    if (user?.role == "admin") {
+                        item { AdminBanner() }
+                    }
                     if (pending.isNotEmpty()) {
                         item { SectionTitle("En attente", Icons.Default.Schedule, "${pending.size}") }
                         items(pending, key = { "p${it.id}" }) { DevisCard(it) }
@@ -111,6 +123,8 @@ private fun DevisCard(d: Devis) {
                             Text(it, color = RevTextSecondary, fontSize = 12.sp)
                         }
                     }
+                    // Admin-only owner row (no-op until Devis.owner lands in data/model/Models.kt).
+                    OwnerRow(owner = null)
                 }
                 StatusBadge(statutLabel, statutKind)
             }

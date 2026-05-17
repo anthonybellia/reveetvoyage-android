@@ -31,6 +31,8 @@ import be.reveetvoyage.app.data.model.Voyage
 import be.reveetvoyage.app.data.repo.MessageRepository
 import be.reveetvoyage.app.data.repo.UserRepository
 import be.reveetvoyage.app.ui.components.*
+import be.reveetvoyage.app.ui.screens.admin.AdminBanner
+import be.reveetvoyage.app.ui.screens.admin.OwnerRow
 import be.reveetvoyage.app.ui.theme.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -105,6 +107,9 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             HeroHeader(user, unread, onOpenNotifications)
+            if (user?.role == "admin") {
+                AdminBanner()
+            }
             be.reveetvoyage.app.ui.components.WeatherCard(
                 weather = weather,
                 locationLabel = locationLabel,
@@ -246,6 +251,8 @@ private fun DevisRowMini(d: Devis) {
                     Text(it.replace('_', ' ').replaceFirstChar(Char::titlecase),
                          color = RevTextSecondary, fontSize = 11.sp)
                 }
+                // Admin-only owner sub-row (always null until Devis.owner is added to data/model).
+                OwnerRow(owner = null)
             }
             StatusBadge(label, kind)
         }

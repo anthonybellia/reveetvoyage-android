@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -58,6 +59,16 @@ fun DevisScreen(vm: DevisViewModel = hiltViewModel()) {
     val validated = devis.filter { it.statut == "valide" }
     val others = devis.filter { it.statut in listOf("refuse", "archive") }
 
+    var wizardOpen by remember { mutableStateOf(false) }
+    if (wizardOpen) {
+        be.reveetvoyage.app.ui.screens.devis_wizard.DevisWizardScreen(
+            onClose = {
+                wizardOpen = false
+                vm.reload()
+            },
+        )
+    }
+
     Box(
         modifier = Modifier.fillMaxSize().background(
             Brush.linearGradient(listOf(RevYellow.copy(alpha = .08f), RevBackground))
@@ -65,11 +76,7 @@ fun DevisScreen(vm: DevisViewModel = hiltViewModel()) {
     ) {
         when {
             isLoading && devis.isEmpty() -> LoadingFull()
-            devis.isEmpty() -> EmptyState(
-                icon = Icons.Default.Description,
-                title = "Aucune demande de voyage",
-                subtitle = "Tes futures demandes apparaîtront ici",
-            )
+            devis.isEmpty() -> EmptyDevisCta(onNewVoyage = { wizardOpen = true })
             else -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
@@ -87,9 +94,73 @@ fun DevisScreen(vm: DevisViewModel = hiltViewModel()) {
                         item { SectionTitle("Archivés", Icons.Default.Archive, "${others.size}") }
                         items(others, key = { "o${it.id}" }) { DevisCard(it) }
                     }
+                    item { Spacer(modifier = Modifier.height(80.dp)) }
                 }
             }
         }
+
+        // Floating action button — always visible to launch wizard
+        ExtendedFloatingActionButton(
+            onClick = { wizardOpen = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(20.dp),
+            containerColor = RevOrange,
+            contentColor = androidx.compose.ui.graphics.Color.White,
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Nouveau voyage", fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun EmptyDevisCta(onNewVoyage: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(96.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        listOf(RevYellow.copy(alpha = .35f), RevOrange.copy(alpha = .25f))
+                    )
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.FlightTakeoff,
+                contentDescription = null,
+                tint = RevOrange,
+                modifier = Modifier.size(44.dp),
+            )
+        }
+        Spacer(Modifier.height(18.dp))
+        Text(
+            "Prêt à partir ?",
+            color = RevBrown,
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Lancez votre première demande en moins de 2 minutes.",
+            color = RevTextSecondary,
+            fontSize = 13.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        Spacer(Modifier.height(22.dp))
+        IOSButton(
+            text = "Nouvelle demande",
+            onClick = onNewVoyage,
+            style = IOSButtonStyle.Primary,
+            icon = Icons.Default.Add,
+        )
     }
 }
 

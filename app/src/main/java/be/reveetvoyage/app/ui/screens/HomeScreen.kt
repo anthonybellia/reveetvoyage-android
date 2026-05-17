@@ -87,6 +87,17 @@ fun HomeScreen(
     val locationLabel by weatherVm.locationLabel.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    // Wizard "Nouveau voyage" — natif Compose, rendu en Dialog plein écran.
+    var wizardOpen by remember { mutableStateOf(false) }
+    if (wizardOpen) {
+        be.reveetvoyage.app.ui.screens.devis_wizard.DevisWizardScreen(
+            onClose = {
+                wizardOpen = false
+                vm.load()
+            },
+        )
+    }
+
     LaunchedEffect(Unit) {
         val pos = be.reveetvoyage.app.ui.components.LocationHelper.lastKnownLocation(context)
             ?: Pair(50.8503, 4.3517) // fallback: Brussels
@@ -111,7 +122,7 @@ fun HomeScreen(
                 isLoading = weatherLoading,
             )
             QuickActions(
-                onNewVoyage = onOpenNewVoyageRequest,
+                onNewVoyage = { wizardOpen = true },
                 onPassengers = onOpenPassengers,
             )
 

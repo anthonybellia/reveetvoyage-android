@@ -42,6 +42,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import be.reveetvoyage.app.ui.screens.*
 import be.reveetvoyage.app.ui.screens.expenses.ExpensesScreen
+import be.reveetvoyage.app.ui.screens.packing.PackingScreen
+import be.reveetvoyage.app.ui.screens.packing.PackingTemplateScreen
 import be.reveetvoyage.app.ui.theme.RevOrange
 import be.reveetvoyage.app.ui.theme.RevTextSecondary
 
@@ -189,6 +191,7 @@ fun MainScreen(onLogout: () -> Unit) {
                     onOpenLanguage = { navController.navigate("language") },
                     onOpenNotifications = { navController.navigate("notif-settings") },
                     onOpenMessages = { navController.navigate("messages?draft=") },
+                    onOpenPackingTemplate = { navController.navigate("packing-template") },
                     onOpenPage = { slug, title ->
                         val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
                         navController.navigate("page/$slug/$encodedTitle")
@@ -204,7 +207,19 @@ fun MainScreen(onLogout: () -> Unit) {
                     onBack = { navController.popBackStack() },
                     onOpenEtape = { etapeId -> navController.navigate("voyage/$id/etape/$etapeId") },
                     onOpenExpenses = { vId -> navController.navigate("expenses/$vId") },
+                    onOpenPacking = { vId -> navController.navigate("packing/$vId") },
                 )
+            }
+            composable("packing/{voyageId}") { entry ->
+                val voyageId = entry.arguments?.getString("voyageId")?.toIntOrNull() ?: 0
+                PackingScreen(
+                    voyageId = voyageId,
+                    onBack = { navController.popBackStack() },
+                    onOpenTemplate = { navController.navigate("packing-template") },
+                )
+            }
+            composable("packing-template") {
+                PackingTemplateScreen(onBack = { navController.popBackStack() })
             }
             composable("expenses/{voyageId}") { entry ->
                 val voyageId = entry.arguments?.getString("voyageId")?.toIntOrNull() ?: 0

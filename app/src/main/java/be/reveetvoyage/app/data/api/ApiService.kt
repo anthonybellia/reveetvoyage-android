@@ -152,4 +152,49 @@ interface ApiService {
 
     @GET("voyages/{id}/settlement")
     suspend fun voyageSettlement(@Path("id") voyageId: Int): SettlementResponse
+
+    // ===== Packing List =====
+
+    @GET("packing-categories")
+    suspend fun packingCategories(): PaginatedResponse<PackingCategory>
+
+    @GET("packing-template")
+    suspend fun packingTemplate(): PaginatedResponse<PackingTemplateItem>
+
+    @POST("packing-template")
+    suspend fun createPackingTemplateItem(@Body req: PackingTemplateItemRequest): WrappedResponse<PackingTemplateItem>
+
+    @PUT("packing-template/{itemId}")
+    suspend fun updatePackingTemplateItem(
+        @Path("itemId") itemId: Int,
+        @Body req: PackingTemplateItemRequest,
+    ): WrappedResponse<PackingTemplateItem>
+
+    @DELETE("packing-template/{itemId}")
+    suspend fun deletePackingTemplateItem(@Path("itemId") itemId: Int): Map<String, String>
+
+    @GET("voyages/{id}/packing")
+    suspend fun voyagePacking(
+        @Path("id") voyageId: Int,
+        @Query("since") since: String? = null,
+    ): PaginatedResponse<VoyagePackingItem>
+
+    @POST("voyages/{id}/packing")
+    suspend fun createVoyagePackingItem(
+        @Path("id") voyageId: Int,
+        @Body req: VoyagePackingCreateRequest,
+    ): WrappedResponse<VoyagePackingItem>
+
+    @PUT("voyages/{id}/packing/{itemId}")
+    suspend fun updateVoyagePackingItem(
+        @Path("id") voyageId: Int,
+        @Path("itemId") itemId: Int,
+        @Body req: VoyagePackingUpdateRequest,
+    ): WrappedResponse<VoyagePackingItem>
+
+    @DELETE("voyages/{id}/packing/{itemId}")
+    suspend fun deleteVoyagePackingItem(
+        @Path("id") voyageId: Int,
+        @Path("itemId") itemId: Int,
+    ): Map<String, String>
 }

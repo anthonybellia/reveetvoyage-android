@@ -394,6 +394,7 @@ fun VoyageDetailScreen(
     onBack: () -> Unit,
     onOpenEtape: (Int) -> Unit = {},
     onOpenExpenses: (Int) -> Unit = {},
+    onOpenPacking: (Int) -> Unit = {},
     vm: VoyageDetailViewModel = hiltViewModel(),
 ) {
     val voyage by vm.voyage.collectAsState()
@@ -445,6 +446,13 @@ fun VoyageDetailScreen(
                         text = "Dépenses partagées",
                         onClick = { onOpenExpenses(voyageId) },
                         icon = Icons.Default.Receipt,
+                        style = IOSButtonStyle.Secondary,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    IOSButton(
+                        text = "Liste de bagage",
+                        onClick = { onOpenPacking(voyageId) },
+                        icon = Icons.Default.Inventory2,
                         style = IOSButtonStyle.Secondary,
                         modifier = Modifier.fillMaxWidth(),
                     )

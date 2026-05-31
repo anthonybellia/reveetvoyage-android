@@ -352,3 +352,58 @@ data class CreateExpenseRequest(
     val location_latitude: Double? = null,
     val location_longitude: Double? = null,
 )
+
+// ===== Packing List =====
+
+@Serializable
+data class PackingCategory(
+    val id: Int,
+    val key: String,
+    val name: String,
+    val icon_key: String,
+    val color: String? = null,
+)
+
+@Serializable
+data class PackingTemplateItem(
+    val id: Int,
+    val category_id: Int? = null,
+    val label: String,
+    val sort_order: Int,
+)
+
+@Serializable
+data class VoyagePackingItem(
+    val id: Int,
+    val voyage_participant_id: Int,
+    val category_id: Int? = null,
+    val label: String,
+    val is_checked: Boolean,
+    val sort_order: Int,
+    val source_template_item_id: Int? = null,
+    val created_at: String? = null,
+    val updated_at: String? = null,
+)
+
+@Serializable
+data class PackingTemplateItemRequest(
+    val category_id: Int? = null,
+    val label: String,
+    val sort_order: Int? = null,
+)
+
+@Serializable
+data class VoyagePackingCreateRequest(
+    val category_id: Int? = null,
+    val label: String,
+    val sort_order: Int? = null,
+    val keep_for_next: Boolean = false,
+)
+
+@Serializable
+data class VoyagePackingUpdateRequest(
+    val is_checked: Boolean? = null,
+    val label: String? = null,
+    val category_id: Int? = null,
+    val sort_order: Int? = null,
+)

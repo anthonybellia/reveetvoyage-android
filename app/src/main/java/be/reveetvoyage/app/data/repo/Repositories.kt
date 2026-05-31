@@ -48,6 +48,21 @@ class ExpenseRepository @Inject constructor(private val api: ApiService) {
 }
 
 @Singleton
+class PackingRepository @Inject constructor(private val api: ApiService) {
+    suspend fun categories() = api.packingCategories().data
+    suspend fun template() = api.packingTemplate().data
+    suspend fun addTemplate(req: PackingTemplateItemRequest) = api.createPackingTemplateItem(req).data
+    suspend fun updateTemplate(id: Int, req: PackingTemplateItemRequest) = api.updatePackingTemplateItem(id, req).data
+    suspend fun deleteTemplate(id: Int) = api.deletePackingTemplateItem(id)
+
+    suspend fun voyagePacking(voyageId: Int, since: String? = null) = api.voyagePacking(voyageId, since).data
+    suspend fun addVoyageItem(voyageId: Int, req: VoyagePackingCreateRequest) = api.createVoyagePackingItem(voyageId, req).data
+    suspend fun updateVoyageItem(voyageId: Int, itemId: Int, req: VoyagePackingUpdateRequest) =
+        api.updateVoyagePackingItem(voyageId, itemId, req).data
+    suspend fun deleteVoyageItem(voyageId: Int, itemId: Int) = api.deleteVoyagePackingItem(voyageId, itemId)
+}
+
+@Singleton
 class DevisRepository @Inject constructor(private val api: ApiService) {
     suspend fun list(page: Int = 1) = api.devis(page).data
 }

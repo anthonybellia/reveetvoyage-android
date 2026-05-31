@@ -104,6 +104,7 @@ fun SettingsScreen(
     onOpenLanguage: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenMessages: () -> Unit,
+    onOpenPackingTemplate: () -> Unit = {},
     onOpenPage: (slug: String, title: String) -> Unit,
     vm: SettingsViewModel = hiltViewModel(),
 ) {
@@ -145,6 +146,9 @@ fun SettingsScreen(
                     RowDivider()
                     SettingsRow(Icons.Default.Email, "Mes messages",
                         "Discussions avec l'équipe", onClick = onOpenMessages)
+                    RowDivider()
+                    SettingsRow(Icons.Default.Inventory2, "Ma liste de bagage",
+                        "Ta liste type réutilisable", onClick = onOpenPackingTemplate)
                 }
             }
 

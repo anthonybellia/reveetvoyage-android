@@ -83,6 +83,34 @@ interface ApiService {
         @Query("per_page") perPage: Int = 20,
     ): PaginatedResponse<Devis>
 
+    @GET("devis/{id}")
+    suspend fun devisDetail(@Path("id") id: Int): WrappedResponse<Devis>
+
+    // Admin : met à jour le devis (statut, notes_admin, champs éditables).
+    @PUT("devis/{id}")
+    suspend fun updateDevis(@Path("id") id: Int, @Body body: DevisUpdateRequest): WrappedResponse<Devis>
+
+    // Admin : convertit le devis en voyage. Renvoie { data: { devis_id, voyage_id } }.
+    @POST("devis/{id}/convert-to-voyage")
+    suspend fun convertDevisToVoyage(@Path("id") id: Int): WrappedResponse<DevisConvertResult>
+
+    // Admin : supprime le devis. Renvoie { ok: true }.
+    @DELETE("devis/{id}")
+    suspend fun deleteDevis(@Path("id") id: Int): Map<String, Boolean>
+
+    // Admin : notes internes threadées. { data: [ {id,contenu,author,created_at} ] }.
+    @GET("devis/{id}/notes")
+    suspend fun devisNotes(@Path("id") id: Int): PaginatedResponse<DevisNote>
+
+    @POST("devis/{id}/notes")
+    suspend fun addDevisNote(@Path("id") id: Int, @Body body: DevisNoteRequest): WrappedResponse<DevisNote>
+
+    @DELETE("devis/{id}/notes/{noteId}")
+    suspend fun deleteDevisNote(
+        @Path("id") id: Int,
+        @Path("noteId") noteId: Int,
+    ): Map<String, Boolean>
+
     // Passengers
     @GET("passengers")
     suspend fun passengers(): PaginatedResponse<Passenger>
@@ -154,6 +182,33 @@ interface ApiService {
         @Path("id") id: Int,
         @Path("userId") userId: Int,
     ): Map<String, String>
+
+    // ===== Invitations (autocomplete + réception) =====
+
+    // Recherche d'un utilisateur par email exact. `data` peut être null.
+    @GET("users/search")
+    suspend fun searchUser(@Query("email") email: String): NullableWrappedResponse<UserSearchResult>
+
+    // Invitations en attente reçues par l'utilisateur courant.
+    @GET("invitations")
+    suspend fun invitations(): PaginatedResponse<VoyageInvitation>
+
+    @POST("voyages/{id}/invitations/accept")
+    suspend fun acceptInvitation(@Path("id") voyageId: Int): InvitationActionResponse
+
+    @POST("voyages/{id}/invitations/decline")
+    suspend fun declineInvitation(@Path("id") voyageId: Int): InvitationActionResponse
+
+    // ===== Notifications =====
+
+    @GET("notifications")
+    suspend fun notifications(): NotificationsResponse
+
+    @POST("notifications/{id}/read")
+    suspend fun markNotificationRead(@Path("id") id: Int): Map<String, Boolean>
+
+    @POST("notifications/read-all")
+    suspend fun markAllNotificationsRead(): Map<String, Boolean>
 
     // ===== Voyage Expenses (Tricount-like) =====
 

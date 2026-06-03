@@ -29,7 +29,9 @@ import be.reveetvoyage.app.data.model.Devis
 import be.reveetvoyage.app.data.model.User
 import be.reveetvoyage.app.data.model.Voyage
 import be.reveetvoyage.app.data.repo.MessageRepository
+import be.reveetvoyage.app.data.repo.NotificationRepository
 import be.reveetvoyage.app.data.repo.UserRepository
+import be.reveetvoyage.app.data.repo.VoyageRepository
 import be.reveetvoyage.app.ui.components.*
 import be.reveetvoyage.app.ui.screens.admin.AdminBanner
 import be.reveetvoyage.app.ui.screens.admin.OwnerRow
@@ -46,6 +48,8 @@ class HomeViewModel @Inject constructor(
     private val api: ApiService,
     private val userRepo: UserRepository,
     private val messageRepo: MessageRepository,
+    private val notifRepo: NotificationRepository,
+    private val voyageRepo: VoyageRepository,
 ) : ViewModel() {
     private val _voyages = MutableStateFlow<List<Voyage>>(emptyList())
     val voyages: StateFlow<List<Voyage>> = _voyages.asStateFlow()
@@ -55,6 +59,14 @@ class HomeViewModel @Inject constructor(
 
     private val _unread = MutableStateFlow(0)
     val unread: StateFlow<Int> = _unread.asStateFlow()
+
+    // Compteur affiché sur la cloche : notifications non-lues serveur.
+    private val _notifUnread = MutableStateFlow(0)
+    val notifUnread: StateFlow<Int> = _notifUnread.asStateFlow()
+
+    // Nombre d'invitations en attente (pour un badge dédié si besoin).
+    private val _pendingInvites = MutableStateFlow(0)
+    val pendingInvites: StateFlow<Int> = _pendingInvites.asStateFlow()
 
     val currentUser: StateFlow<User?> = userRepo.currentUser
     // Admin "effectif" : vrai admin ET pas en mode aperçu utilisateur.
@@ -68,6 +80,8 @@ class HomeViewModel @Inject constructor(
             _voyages.value = runCatching { api.voyages(perPage = 5).data }.getOrDefault(emptyList())
             _devis.value = runCatching { api.devis(perPage = 5).data }.getOrDefault(emptyList())
             _unread.value = runCatching { messageRepo.unreadCount() }.getOrDefault(0)
+            _notifUnread.value = notifRepo.unreadCount()
+            _pendingInvites.value = voyageRepo.invitations().size
         }
     }
 }
@@ -84,7 +98,8 @@ fun HomeScreen(
 ) {
     val voyages by vm.voyages.collectAsState()
     val devis by vm.devis.collectAsState()
-    val unread by vm.unread.collectAsState()
+    val notifUnread by vm.notifUnread.collectAsState()
+    val pendingInvites by vm.pendingInvites.collectAsState()
     val user by vm.currentUser.collectAsState()
     val isAdmin by vm.isAdmin.collectAsState()
     val weather by weatherVm.weather.collectAsState()
@@ -109,7 +124,8 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            HeroHeader(user, unread, onOpenNotifications)
+            // Badge cloche : notifications non-lues + invitations en attente.
+            HeroHeader(user, notifUnread + pendingInvites, onOpenNotifications)
             if (isAdmin) {
                 AdminBanner()
             }

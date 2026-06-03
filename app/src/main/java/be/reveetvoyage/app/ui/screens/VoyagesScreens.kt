@@ -71,7 +71,14 @@ class VoyagesViewModel @Inject constructor(
     // Admin "effectif" : vrai admin ET pas en mode aperçu utilisateur.
     val isAdmin: StateFlow<Boolean> = userRepo.isAdmin
 
-    init { reload() }
+    init {
+        reload()
+        // Recharge automatiquement quand un refresh global est demandé
+        // (ex : acceptation d'une invitation depuis un autre écran).
+        viewModelScope.launch {
+            repo.refreshSignal.collect { signal -> if (signal > 0) reload() }
+        }
+    }
 
     fun reload() {
         viewModelScope.launch {
@@ -225,6 +232,14 @@ class VoyageDetailViewModel @Inject constructor(
     private val _removingMemberIds = MutableStateFlow<Set<Int>>(emptySet())
     val removingMemberIds: StateFlow<Set<Int>> = _removingMemberIds.asStateFlow()
 
+    // ===== Autocomplete invitation =====
+    // Compte trouvé pour l'email saisi (carte de confirmation), null sinon.
+    private val _inviteMatch = MutableStateFlow<be.reveetvoyage.app.data.model.UserSearchResult?>(null)
+    val inviteMatch: StateFlow<be.reveetvoyage.app.data.model.UserSearchResult?> = _inviteMatch.asStateFlow()
+    private val _inviteSearching = MutableStateFlow(false)
+    val inviteSearching: StateFlow<Boolean> = _inviteSearching.asStateFlow()
+    private var searchJob: kotlinx.coroutines.Job? = null
+
     fun load(id: Int) {
         viewModelScope.launch {
             runCatching { repo.detail(id) }.onSuccess { v ->
@@ -260,6 +275,7 @@ class VoyageDetailViewModel @Inject constructor(
             when (val res = repo.inviteMember(voyageId, cleaned)) {
                 is be.reveetvoyage.app.data.repo.InviteResult.Success -> {
                     _memberFeedback.value = "Invitation traitée."
+                    clearInviteSearch()
                     loadMembers(voyageId)
                 }
                 is be.reveetvoyage.app.data.repo.InviteResult.Forbidden ->
@@ -274,6 +290,30 @@ class VoyageDetailViewModel @Inject constructor(
     }
 
     fun clearMemberFeedback() { _memberFeedback.value = null }
+
+    // Recherche debouncée (~400ms) d'un compte par email exact pendant la saisie.
+    // Met à jour _inviteMatch (carte de confirmation) ou le remet à null.
+    fun onInviteEmailChanged(email: String) {
+        val cleaned = email.trim()
+        searchJob?.cancel()
+        if (!cleaned.contains('@') || cleaned.length < 5) {
+            _inviteMatch.value = null
+            _inviteSearching.value = false
+            return
+        }
+        searchJob = viewModelScope.launch {
+            _inviteSearching.value = true
+            kotlinx.coroutines.delay(400)
+            _inviteMatch.value = repo.searchUser(cleaned)
+            _inviteSearching.value = false
+        }
+    }
+
+    fun clearInviteSearch() {
+        searchJob?.cancel()
+        _inviteMatch.value = null
+        _inviteSearching.value = false
+    }
 
     fun removeMember(voyageId: Int, userId: Int) {
         viewModelScope.launch {
@@ -478,6 +518,8 @@ fun VoyageDetailScreen(
     val inviting by vm.inviting.collectAsState()
     val memberFeedback by vm.memberFeedback.collectAsState()
     val removingMemberIds by vm.removingMemberIds.collectAsState()
+    val inviteMatch by vm.inviteMatch.collectAsState()
+    val inviteSearching by vm.inviteSearching.collectAsState()
     var pendingToggle by remember { mutableStateOf<VoyageEtape?>(null) }
     var celebrationBurst by remember { mutableStateOf(0) }
     var previousCompletedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
@@ -569,7 +611,10 @@ fun VoyageDetailScreen(
                         inviting = inviting,
                         feedback = memberFeedback,
                         removingMemberIds = removingMemberIds,
+                        inviteMatch = inviteMatch,
+                        inviteSearching = inviteSearching,
                         onInvite = { email -> vm.invite(voyageId, email) },
+                        onEmailChanged = { email -> vm.onInviteEmailChanged(email) },
                         onClearFeedback = { vm.clearMemberFeedback() },
                         onRemove = { userId -> vm.removeMember(voyageId, userId) },
                     )
@@ -1008,11 +1053,16 @@ fun VoyageMembersSection(
     inviting: Boolean,
     feedback: String?,
     removingMemberIds: Set<Int>,
+    inviteMatch: be.reveetvoyage.app.data.model.UserSearchResult?,
+    inviteSearching: Boolean,
     onInvite: (String) -> Unit,
+    onEmailChanged: (String) -> Unit,
     onClearFeedback: () -> Unit,
     onRemove: (Int) -> Unit,
 ) {
     var email by remember { mutableStateOf("") }
+    // Vrai si l'email saisi ressemble à une adresse complète (heuristique simple).
+    val emailLooksValid = email.contains('@') && email.contains('.') && email.length >= 5
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionTitle("Voyageurs & membres", Icons.Default.Group)
@@ -1032,6 +1082,7 @@ fun VoyageMembersSection(
                         onValueChange = {
                             email = it
                             if (feedback != null) onClearFeedback()
+                            onEmailChanged(it)
                         },
                         placeholder = "adresse@email.com",
                         icon = Icons.Default.Email,
@@ -1039,8 +1090,40 @@ fun VoyageMembersSection(
                             keyboardType = androidx.compose.ui.text.input.KeyboardType.Email,
                         ),
                     )
+
+                    // Aperçu autocomplete : compte trouvé, recherche en cours, ou
+                    // proposition d'invitation par email si aucun compte exact.
+                    when {
+                        inviteSearching -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp, color = RevOrange,
+                                )
+                                Text("Recherche du compte…", color = RevTextSecondary, fontSize = 12.sp)
+                            }
+                        }
+                        inviteMatch != null -> {
+                            InviteMatchCard(inviteMatch)
+                        }
+                        emailLooksValid -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(Icons.Default.MailOutline, null,
+                                    tint = RevTextSecondary, modifier = Modifier.size(16.dp))
+                                Text("Cette personne n'a pas encore de compte : invitation par e-mail.",
+                                    color = RevTextSecondary, fontSize = 12.sp)
+                            }
+                        }
+                    }
+
                     IOSButton(
-                        text = "Inviter",
+                        text = if (inviteMatch != null) "Ajouter ${inviteMatch.displayName}" else "Inviter",
                         onClick = {
                             onInvite(email)
                             email = ""
@@ -1107,6 +1190,50 @@ fun VoyageMembersSection(
                 }
             }
         }
+    }
+}
+
+// Carte de confirmation affichée quand un compte correspond exactement à
+// l'email saisi : avatar + nom + email, pour rassurer avant l'ajout.
+@Composable
+private fun InviteMatchCard(match: be.reveetvoyage.app.data.model.UserSearchResult) {
+    val avatarUrl: String? = match.avatar_url?.takeIf { it.isNotBlank() }?.let {
+        if (it.startsWith("http")) it else ApiConfig.SITE_BASE + it
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(RevOrange.copy(alpha = 0.08f))
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(40.dp).clip(CircleShape)
+                .background(Brush.linearGradient(listOf(RevYellow, RevOrange, RevRed))),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (avatarUrl != null) {
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Text(
+                    text = (match.displayName.firstOrNull() ?: '?').uppercase(),
+                    color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                )
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(match.displayName, color = RevBrown, fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp, maxLines = 1)
+            Text(match.email, color = RevTextSecondary, fontSize = 12.sp, maxLines = 1)
+        }
+        Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(20.dp))
     }
 }
 

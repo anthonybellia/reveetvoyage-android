@@ -1,6 +1,7 @@
 package be.reveetvoyage.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -48,6 +49,9 @@ class DevisViewModel @Inject constructor(
     // Admin "effectif" : vrai admin ET pas en mode aperçu utilisateur.
     val isAdmin: StateFlow<Boolean> = userRepo.isAdmin
 
+    // Signal de refresh émis par le repo après une action admin (détail).
+    val refreshSignal: StateFlow<Int> = repo.refreshSignal
+
     init { reload() }
 
     fun reload() {
@@ -60,11 +64,18 @@ class DevisViewModel @Inject constructor(
 }
 
 @Composable
-fun DevisScreen(vm: DevisViewModel = hiltViewModel()) {
+fun DevisScreen(
+    vm: DevisViewModel = hiltViewModel(),
+    onOpenDevis: (Int) -> Unit = {},
+) {
     val devis by vm.devis.collectAsState()
     val isLoading by vm.isLoading.collectAsState()
     val user by vm.currentUser.collectAsState()
     val isAdmin by vm.isAdmin.collectAsState()
+    val refreshSignal by vm.refreshSignal.collectAsState()
+
+    // Recharge la liste après une action admin effectuée dans l'écran détail.
+    LaunchedEffect(refreshSignal) { if (refreshSignal > 0) vm.reload() }
 
     val pending = devis.filter { it.statut in listOf("nouveau", "en_cours") }
     val validated = devis.filter { it.statut == "valide" }
@@ -92,15 +103,15 @@ fun DevisScreen(vm: DevisViewModel = hiltViewModel()) {
                     }
                     if (pending.isNotEmpty()) {
                         item { SectionTitle("En attente", Icons.Default.Schedule, "${pending.size}") }
-                        items(pending, key = { "p${it.id}" }) { DevisCard(it, isAdmin = isAdmin) }
+                        items(pending, key = { "p${it.id}" }) { DevisCard(it, isAdmin = isAdmin, onClick = { onOpenDevis(it.id) }) }
                     }
                     if (validated.isNotEmpty()) {
                         item { SectionTitle("Validés", Icons.Default.CheckCircle, "${validated.size}") }
-                        items(validated, key = { "v${it.id}" }) { DevisCard(it, isAdmin = isAdmin) }
+                        items(validated, key = { "v${it.id}" }) { DevisCard(it, isAdmin = isAdmin, onClick = { onOpenDevis(it.id) }) }
                     }
                     if (others.isNotEmpty()) {
                         item { SectionTitle("Archivés", Icons.Default.Archive, "${others.size}") }
-                        items(others, key = { "o${it.id}" }) { DevisCard(it, isAdmin = isAdmin) }
+                        items(others, key = { "o${it.id}" }) { DevisCard(it, isAdmin = isAdmin, onClick = { onOpenDevis(it.id) }) }
                     }
                 }
             }
@@ -109,9 +120,9 @@ fun DevisScreen(vm: DevisViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun DevisCard(d: Devis, isAdmin: Boolean = false) {
+private fun DevisCard(d: Devis, isAdmin: Boolean = false, onClick: () -> Unit = {}) {
     val (statutLabel, statutKind) = devisStatutLabel(d.statut)
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
+    GlassCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f)) {

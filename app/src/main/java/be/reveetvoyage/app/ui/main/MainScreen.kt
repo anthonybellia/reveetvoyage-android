@@ -181,7 +181,9 @@ fun MainScreen(onLogout: () -> Unit) {
             composable(Tab.Voyages.route) {
                 VoyagesScreen(onOpenVoyage = { id -> navController.navigate("voyage/$id") })
             }
-            composable(Tab.Devis.route) { DevisScreen() }
+            composable(Tab.Devis.route) {
+                DevisScreen(onOpenDevis = { id -> navController.navigate("devis_detail/$id") })
+            }
             composable(Tab.Passengers.route) { PassengersScreen() }
             composable(Tab.Profile.route) {
                 SettingsScreen(
@@ -191,6 +193,7 @@ fun MainScreen(onLogout: () -> Unit) {
                     onOpenLanguage = { navController.navigate("language") },
                     onOpenNotifications = { navController.navigate("notif-settings") },
                     onOpenMessages = { navController.navigate("messages?draft=") },
+                    onOpenInvitations = { navController.navigate("invitations") },
                     onOpenPackingTemplate = { navController.navigate("packing-template") },
                     onOpenPage = { slug, title ->
                         val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
@@ -200,6 +203,13 @@ fun MainScreen(onLogout: () -> Unit) {
             }
 
             // Sub-routes
+            composable("devis_detail/{id}") { entry ->
+                val id = entry.arguments?.getString("id")?.toIntOrNull() ?: 0
+                DevisDetailScreen(
+                    devisId = id,
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable("voyage/{id}") { entry ->
                 val id = entry.arguments?.getString("id")?.toIntOrNull() ?: 0
                 VoyageDetailScreen(
@@ -244,7 +254,11 @@ fun MainScreen(onLogout: () -> Unit) {
                 NotificationsScreen(
                     onBack = { navController.popBackStack() },
                     onOpenMessages = { navController.navigate("messages?draft=") },
+                    onOpenInvitations = { navController.navigate("invitations") },
                 )
+            }
+            composable("invitations") {
+                InvitationsScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 "messages?draft={draft}",

@@ -180,19 +180,72 @@ data class Devis(
     val prenom: String,
     val email: String,
     val statut: String,
+    val telephone: String? = null,
     val titre_voyage: String? = null,
     val destination: String? = null,
     val destination_souhaitee: String? = null,
     val type_voyage: String? = null,
     val nb_personnes: Int? = null,
+    val participants: String? = null,
     val budget: String? = null,
     val duree: String? = null,
+    val dates_souhaitees: String? = null,
+    val flexible_dates: String? = null,
+    val lieu_depart: String? = null,
     val message: String? = null,
     val cadre: String? = null,
     val hebergement: String? = null,
+    val besoins_specifiques: String? = null,
     val activites: String? = null,
+    val activites_eviter: String? = null,
+    val imperatifs: String? = null,
+    val evenement: String? = null,
+    val montant_estime: Double? = null,
+    val date_depart_prevue: String? = null,
+    val date_retour_prevue: String? = null,
+    // Présent → un voyage est déjà lié (on masque alors « Convertir en voyage »).
+    val voyage_id: Int? = null,
+    val created_at: String? = null,
+    val updated_at: String? = null,
     val owner: ApiOwner? = null,
 )
+
+/** Corps de PUT /devis/{id} : tous les champs sont optionnels (envoie ce qu'on édite). */
+@Serializable
+data class DevisUpdateRequest(
+    val statut: String? = null,
+    val notes_admin: String? = null,
+    val destination: String? = null,
+    val destination_souhaitee: String? = null,
+    val dates_souhaitees: String? = null,
+    val duree: String? = null,
+    val nb_personnes: Int? = null,
+    val participants: String? = null,
+    val budget: String? = null,
+    val type_voyage: String? = null,
+    val message: String? = null,
+    val titre_voyage: String? = null,
+    val montant_estime: Double? = null,
+    val date_depart_prevue: String? = null,
+    val date_retour_prevue: String? = null,
+)
+
+/** Note interne threadée d'un devis : { id, contenu, author, created_at }. */
+@Serializable
+data class DevisNote(
+    val id: Int,
+    val contenu: String,
+    val author: String? = null,
+    val created_at: String? = null,
+)
+
+/** Corps de POST /devis/{id}/notes. */
+@Serializable
+data class DevisNoteRequest(val contenu: String)
+
+/** Enveloppe { data: { devis_id, voyage_id } } renvoyée par convert-to-voyage. */
+@Serializable
+data class DevisConvertResult(val devis_id: Int, val voyage_id: Int)
 
 @Serializable
 data class Passenger(
@@ -257,6 +310,11 @@ data class PaginatedResponse<T>(val data: List<T> = emptyList())
 
 @Serializable
 data class WrappedResponse<T>(val data: T)
+
+// Enveloppe { data: ... | null } : utilisée par GET /users/search où `data`
+// vaut null si aucun compte ne correspond exactement à l'email.
+@Serializable
+data class NullableWrappedResponse<T>(val data: T? = null)
 
 @Serializable
 data class PageResponse(
@@ -428,6 +486,79 @@ data class MembersResponse(
 data class InviteRequest(
     val email: String,
     val role: String = "collaborator",
+)
+
+// ===== Invitations & autocomplete invitation =====
+
+// Résultat d'une recherche d'utilisateur par email exact.
+// Renvoyé par GET /users/search?email= dans { data: ... } ; data == null si
+// aucun compte exact ne correspond (→ on proposera l'invitation par email).
+@Serializable
+data class UserSearchResult(
+    val id: Int,
+    val prenom: String? = null,
+    val name: String? = null,
+    val email: String,
+    val avatar_url: String? = null,
+) {
+    // Libellé d'affichage : privilégie le nom complet, retombe sur prénom puis email.
+    val displayName: String get() {
+        name?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        prenom?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        return email
+    }
+}
+
+// Voyage référencé par une invitation (sous-ensemble léger de Voyage).
+@Serializable
+data class InvitedVoyage(
+    val id: Int,
+    val titre: String? = null,
+    val destination: String? = null,
+    val date_depart: String? = null,
+    val date_retour: String? = null,
+    val image: String? = null,
+)
+
+// Invitation en attente reçue par l'utilisateur courant.
+// Renvoyée par GET /invitations dans le tableau `data`.
+@Serializable
+data class VoyageInvitation(
+    val voyage: InvitedVoyage,
+    val role: String = "collaborator",
+    val inviter_name: String? = null,
+    val created_at: String? = null,
+)
+
+// Réponse des endpoints accept / decline ({ ok, linked? }).
+@Serializable
+data class InvitationActionResponse(
+    val ok: Boolean = false,
+    val linked: Boolean? = null,
+)
+
+// ===== Notifications =====
+
+// Notification persistée côté serveur, listée par GET /notifications.
+@Serializable
+data class AppNotification(
+    val id: Int,
+    val type: String? = null,
+    val titre: String? = null,
+    val message: String? = null,
+    val url: String? = null,
+    val lu: Boolean = false,
+    val created_at: String? = null,
+) {
+    // Vrai pour une invitation à un voyage → router vers « Mes invitations ».
+    val isVoyageInvite: Boolean get() = type == "voyage_invite"
+}
+
+// Enveloppe de GET /notifications ({ data: [...], unread_count }).
+@Serializable
+data class NotificationsResponse(
+    val data: List<AppNotification> = emptyList(),
+    val unread_count: Int = 0,
 )
 
 // ===== Packing List =====

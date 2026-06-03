@@ -30,6 +30,12 @@ class VoyageRepository @Inject constructor(
     private val api: ApiService,
     @ApplicationContext private val context: Context,
 ) {
+    // Signal incrémenté quand la liste des voyages doit être rechargée
+    // (ex : acceptation d'une invitation). Les écrans Voyages/Home l'observent.
+    private val _refreshSignal = MutableStateFlow(0)
+    val refreshSignal: StateFlow<Int> = _refreshSignal.asStateFlow()
+    fun requestRefresh() { _refreshSignal.value = _refreshSignal.value + 1 }
+
     suspend fun list(page: Int = 1) = api.voyages(page).data
     suspend fun detail(id: Int) = api.voyageDetail(id).data
     suspend fun toggleEtape(voyageId: Int, etapeId: Int) = api.toggleEtape(voyageId, etapeId).data
@@ -106,6 +112,25 @@ class VoyageRepository @Inject constructor(
 
     suspend fun removeMember(voyageId: Int, userId: Int) = api.removeMember(voyageId, userId)
 
+    // ===== Invitations (autocomplete + réception) =====
+
+    // Recherche un compte par email exact. Renvoie null si aucun match
+    // (ou en cas d'erreur réseau : on retombera sur l'invitation par email).
+    suspend fun searchUser(email: String): UserSearchResult? =
+        runCatching { api.searchUser(email.trim()).data }.getOrNull()
+
+    suspend fun invitations(): List<VoyageInvitation> =
+        runCatching { api.invitations().data }.getOrDefault(emptyList())
+
+    // Accepte une invitation. `linked` indique si le compte a été lié au voyage.
+    // En cas de succès, signale un refresh global de la liste des voyages.
+    suspend fun acceptInvitation(voyageId: Int): Boolean =
+        runCatching { api.acceptInvitation(voyageId).ok }.getOrDefault(false)
+            .also { if (it) requestRefresh() }
+
+    suspend fun declineInvitation(voyageId: Int): Boolean =
+        runCatching { api.declineInvitation(voyageId).ok }.getOrDefault(false)
+
     // Extrait le champ "message" d'un corps d'erreur JSON sans dépendre du modèle.
     private fun extractMessage(body: String?): String? {
         if (body.isNullOrBlank()) return null
@@ -156,7 +181,36 @@ class PackingRepository @Inject constructor(private val api: ApiService) {
 
 @Singleton
 class DevisRepository @Inject constructor(private val api: ApiService) {
+    // Signal incrémenté après une action admin (update/convert/delete) pour que
+    // l'écran liste se recharge à son retour. La liste l'observe via collectAsState.
+    private val _refreshSignal = MutableStateFlow(0)
+    val refreshSignal: StateFlow<Int> = _refreshSignal.asStateFlow()
+    fun requestRefresh() { _refreshSignal.value = _refreshSignal.value + 1 }
+
     suspend fun list(page: Int = 1) = api.devis(page).data
+
+    suspend fun detail(id: Int) = api.devisDetail(id).data
+
+    /** Met à jour le devis (admin). Signale un refresh de la liste. */
+    suspend fun update(id: Int, body: DevisUpdateRequest): Devis =
+        api.updateDevis(id, body).data.also { requestRefresh() }
+
+    /** Convertit en voyage (admin). Renvoie l'id du voyage créé/lié. */
+    suspend fun convertToVoyage(id: Int): Int =
+        api.convertDevisToVoyage(id).data.voyage_id.also { requestRefresh() }
+
+    /** Supprime le devis (admin). Signale un refresh de la liste. */
+    suspend fun delete(id: Int): Boolean =
+        (api.deleteDevis(id)["ok"] ?: true).also { requestRefresh() }
+
+    suspend fun notes(id: Int): List<DevisNote> =
+        runCatching { api.devisNotes(id).data }.getOrDefault(emptyList())
+
+    suspend fun addNote(id: Int, contenu: String): DevisNote =
+        api.addDevisNote(id, DevisNoteRequest(contenu)).data
+
+    suspend fun deleteNote(id: Int, noteId: Int): Boolean =
+        api.deleteDevisNote(id, noteId)["ok"] ?: true
 }
 
 @Singleton
@@ -192,9 +246,32 @@ class MessageRepository @Inject constructor(
 }
 
 @Singleton
+class NotificationRepository @Inject constructor(private val api: ApiService) {
+    // Liste des notifications + compteur non-lues. Renvoie une réponse vide en
+    // cas d'échec pour ne jamais casser l'UI (cloche / écran liste).
+    suspend fun list(): NotificationsResponse =
+        runCatching { api.notifications() }.getOrDefault(NotificationsResponse())
+
+    // Compteur non-lues seul (pour le badge de la cloche). 0 si indisponible.
+    suspend fun unreadCount(): Int =
+        runCatching { api.notifications().unread_count }.getOrDefault(0)
+
+    suspend fun markRead(id: Int): Boolean =
+        runCatching { api.markNotificationRead(id); true }.getOrDefault(false)
+
+    suspend fun markAllRead(): Boolean =
+        runCatching { api.markAllNotificationsRead(); true }.getOrDefault(false)
+}
+
+@Singleton
 class UserRepository @Inject constructor(
     private val api: ApiService,
     @ApplicationContext private val context: Context,
+    // État partagé lu par l'AuthInterceptor pour l'en-tête X-Preview-As-User.
+    private val previewState: be.reveetvoyage.app.data.api.PreviewState,
+    // Pour rafraîchir la liste des voyages quand on bascule l'aperçu : le scope
+    // côté API change, donc les données affichées doivent être rechargées.
+    private val voyageRepository: VoyageRepository,
 ) {
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
@@ -223,18 +300,39 @@ class UserRepository @Inject constructor(
             user?.role == "admin" && !preview
         }.stateIn(repoScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, false)
 
-    fun setPreviewAsUser(enabled: Boolean) { _previewAsUser.value = enabled }
-    fun togglePreviewAsUser() { _previewAsUser.value = !_previewAsUser.value }
+    fun setPreviewAsUser(enabled: Boolean) {
+        if (_previewAsUser.value == enabled) return
+        _previewAsUser.value = enabled
+        applyPreviewState()
+    }
+    fun togglePreviewAsUser() {
+        _previewAsUser.value = !_previewAsUser.value
+        applyPreviewState()
+    }
+
+    // Propage l'état d'aperçu vers l'interceptor (en-tête HTTP) puis force le
+    // rechargement des voyages : le backend scope différemment selon l'en-tête.
+    private fun applyPreviewState() {
+        previewState.setPreviewAsUser(_previewAsUser.value)
+        voyageRepository.requestRefresh()
+    }
 
     suspend fun refresh(): User? {
-        return runCatching { api.me().user }.getOrNull()?.also { _currentUser.value = it }
+        return runCatching { api.me().user }.getOrNull()?.also {
+            _currentUser.value = it
+            previewState.setRealAdmin(it.role == "admin")
+        }
     }
 
     fun setCachedUser(user: User?) {
         _currentUser.value = user
+        previewState.setRealAdmin(user?.role == "admin")
         // À la déconnexion, on réinitialise l'aperçu pour ne pas le conserver
         // d'une session à l'autre.
-        if (user == null) _previewAsUser.value = false
+        if (user == null) {
+            _previewAsUser.value = false
+            previewState.setPreviewAsUser(false)
+        }
     }
 
     suspend fun updateProfile(req: UpdateProfileRequest): Boolean = runCatching {

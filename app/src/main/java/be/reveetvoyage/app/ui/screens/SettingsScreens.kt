@@ -5,6 +5,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -161,6 +163,7 @@ fun SettingsScreen(
     onOpenLanguage: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenMessages: () -> Unit,
+    onOpenInvitations: () -> Unit = {},
     onOpenPackingTemplate: () -> Unit = {},
     onOpenPage: (slug: String, title: String) -> Unit,
     vm: SettingsViewModel = hiltViewModel(),
@@ -213,6 +216,9 @@ fun SettingsScreen(
                     RowDivider()
                     SettingsRow(Icons.Default.Email, "Mes messages",
                         "Discussions avec l'équipe", onClick = onOpenMessages)
+                    RowDivider()
+                    SettingsRow(Icons.Default.GroupAdd, "Mes invitations",
+                        "Voyages partagés avec moi", onClick = onOpenInvitations)
                     RowDivider()
                     SettingsRow(Icons.Default.Inventory2, "Ma liste de bagage",
                         "Ta liste type réutilisable", onClick = onOpenPackingTemplate)
@@ -675,57 +681,137 @@ private fun NotifToggleRow(
 }
 
 // ============================================================
-// NotificationsScreen — placeholder + unread messages count
+// NotificationsScreen — liste des notifications serveur (lu/non-lu)
 // ============================================================
 @HiltViewModel
 class NotificationsScreenViewModel @Inject constructor(
-    private val msgRepo: be.reveetvoyage.app.data.repo.MessageRepository,
+    private val notifRepo: be.reveetvoyage.app.data.repo.NotificationRepository,
 ) : ViewModel() {
-    private val _unread = MutableStateFlow(0)
-    val unread: StateFlow<Int> = _unread
+    private val _items = MutableStateFlow<List<be.reveetvoyage.app.data.model.AppNotification>>(emptyList())
+    val items: StateFlow<List<be.reveetvoyage.app.data.model.AppNotification>> = _items
 
-    init { viewModelScope.launch { _unread.value = runCatching { msgRepo.unreadCount() }.getOrDefault(0) } }
+    private val _loading = MutableStateFlow(false)
+    val loading: StateFlow<Boolean> = _loading
+
+    init { load() }
+
+    fun load() {
+        viewModelScope.launch {
+            _loading.value = true
+            _items.value = notifRepo.list().data
+            _loading.value = false
+        }
+    }
+
+    // Marque une notification lue (optimiste) et persiste côté serveur.
+    fun markRead(id: Int) {
+        _items.value = _items.value.map { if (it.id == id) it.copy(lu = true) else it }
+        viewModelScope.launch { notifRepo.markRead(id) }
+    }
+
+    fun markAllRead() {
+        _items.value = _items.value.map { it.copy(lu = true) }
+        viewModelScope.launch { notifRepo.markAllRead() }
+    }
 }
 
 @Composable
 fun NotificationsScreen(
     onBack: () -> Unit,
     onOpenMessages: () -> Unit,
+    onOpenInvitations: () -> Unit,
     vm: NotificationsScreenViewModel = hiltViewModel(),
 ) {
-    val unread by vm.unread.collectAsState()
+    val items by vm.items.collectAsState()
+    val loading by vm.loading.collectAsState()
+    val hasUnread = items.any { !it.lu }
 
     Column(modifier = Modifier.fillMaxSize().background(RevBackground)) {
-        IOSTopBar(title = "Notifications", onBack = onBack)
+        IOSTopBar(
+            title = "Notifications",
+            onBack = onBack,
+            trailing = if (hasUnread) {
+                {
+                    TextButton(onClick = { vm.markAllRead() }) {
+                        Text("Tout lire", color = RevOrange, fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            } else null,
+        )
 
         Box(
             modifier = Modifier.fillMaxSize().background(
                 Brush.verticalGradient(listOf(RevYellow.copy(alpha = .06f), RevBackground))
             )
         ) {
-            if (unread == 0) {
-                EmptyState(Icons.Default.NotificationsOff, "Aucune notification",
-                    "On te préviendra dès qu'il y aura du nouveau.")
-            } else {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    GlassCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenMessages)) {
-                        Row(verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Box(modifier = Modifier.size(42.dp).clip(CircleShape).background(
-                                Brush.linearGradient(listOf(RevOrange.copy(alpha = .85f), RevOrange))
-                            ), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.MarkEmailUnread, null, tint = Color.White)
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Tu as $unread message${if (unread > 1) "s" else ""} non lu${if (unread > 1) "s" else ""}",
-                                     color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                Text("L'équipe Rêve et Voyage t'a répondu",
-                                     color = RevTextSecondary, fontSize = 12.sp)
-                            }
-                            Icon(Icons.Default.ChevronRight, null, tint = RevTextSecondary.copy(alpha = .5f))
+            when {
+                loading && items.isEmpty() -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = RevOrange)
+                    }
+                }
+                items.isEmpty() -> {
+                    EmptyState(Icons.Default.NotificationsOff, "Aucune notification",
+                        "On te préviendra dès qu'il y aura du nouveau.")
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(items, key = { it.id }) { n ->
+                            NotificationRow(
+                                notification = n,
+                                onClick = {
+                                    if (!n.lu) vm.markRead(n.id)
+                                    if (n.isVoyageInvite) onOpenInvitations()
+                                    else if (n.type == "message") onOpenMessages()
+                                },
+                            )
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationRow(
+    notification: be.reveetvoyage.app.data.model.AppNotification,
+    onClick: () -> Unit,
+) {
+    val (icon, tint) = when {
+        notification.isVoyageInvite -> Icons.Default.GroupAdd to RevOrange
+        notification.type == "message" -> Icons.Default.MarkEmailUnread to RevOrange
+        else -> Icons.Default.Notifications to RevOrange
+    }
+    GlassCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(modifier = Modifier.size(42.dp).clip(CircleShape).background(
+                Brush.linearGradient(listOf(tint.copy(alpha = .85f), tint))
+            ), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    notification.titre ?: "Notification",
+                    color = RevBrown,
+                    fontWeight = if (notification.lu) FontWeight.Medium else FontWeight.Bold,
+                    fontSize = 14.sp, maxLines = 1,
+                )
+                notification.message?.let {
+                    Text(it, color = RevTextSecondary, fontSize = 12.sp, maxLines = 2)
+                }
+            }
+            if (!notification.lu) {
+                Box(modifier = Modifier.size(9.dp).clip(CircleShape).background(RevRed))
+            } else {
+                Icon(Icons.Default.ChevronRight, null,
+                    tint = RevTextSecondary.copy(alpha = .5f), modifier = Modifier.size(18.dp))
             }
         }
     }

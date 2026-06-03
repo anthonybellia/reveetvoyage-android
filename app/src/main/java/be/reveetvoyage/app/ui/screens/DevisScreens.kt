@@ -45,6 +45,8 @@ class DevisViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
     val currentUser: StateFlow<User?> = userRepo.currentUser
+    // Admin "effectif" : vrai admin ET pas en mode aperçu utilisateur.
+    val isAdmin: StateFlow<Boolean> = userRepo.isAdmin
 
     init { reload() }
 
@@ -62,6 +64,7 @@ fun DevisScreen(vm: DevisViewModel = hiltViewModel()) {
     val devis by vm.devis.collectAsState()
     val isLoading by vm.isLoading.collectAsState()
     val user by vm.currentUser.collectAsState()
+    val isAdmin by vm.isAdmin.collectAsState()
 
     val pending = devis.filter { it.statut in listOf("nouveau", "en_cours") }
     val validated = devis.filter { it.statut == "valide" }
@@ -84,20 +87,20 @@ fun DevisScreen(vm: DevisViewModel = hiltViewModel()) {
                     modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
-                    if (user?.role == "admin") {
+                    if (isAdmin) {
                         item { AdminBanner() }
                     }
                     if (pending.isNotEmpty()) {
                         item { SectionTitle("En attente", Icons.Default.Schedule, "${pending.size}") }
-                        items(pending, key = { "p${it.id}" }) { DevisCard(it) }
+                        items(pending, key = { "p${it.id}" }) { DevisCard(it, isAdmin = isAdmin) }
                     }
                     if (validated.isNotEmpty()) {
                         item { SectionTitle("Validés", Icons.Default.CheckCircle, "${validated.size}") }
-                        items(validated, key = { "v${it.id}" }) { DevisCard(it) }
+                        items(validated, key = { "v${it.id}" }) { DevisCard(it, isAdmin = isAdmin) }
                     }
                     if (others.isNotEmpty()) {
                         item { SectionTitle("Archivés", Icons.Default.Archive, "${others.size}") }
-                        items(others, key = { "o${it.id}" }) { DevisCard(it) }
+                        items(others, key = { "o${it.id}" }) { DevisCard(it, isAdmin = isAdmin) }
                     }
                 }
             }
@@ -106,7 +109,7 @@ fun DevisScreen(vm: DevisViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun DevisCard(d: Devis) {
+private fun DevisCard(d: Devis, isAdmin: Boolean = false) {
     val (statutLabel, statutKind) = devisStatutLabel(d.statut)
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -123,8 +126,8 @@ private fun DevisCard(d: Devis) {
                             Text(it, color = RevTextSecondary, fontSize = 12.sp)
                         }
                     }
-                    // Admin-only owner row (no-op until Devis.owner lands in data/model/Models.kt).
-                    OwnerRow(owner = d.owner)
+                    // Ligne propriétaire réservée à l'admin (masquée en mode aperçu utilisateur).
+                    if (isAdmin) OwnerRow(owner = d.owner)
                 }
                 StatusBadge(statutLabel, statutKind)
             }

@@ -25,6 +25,9 @@ class PackingViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _isGenerating = MutableStateFlow(false)
+    val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
@@ -108,6 +111,19 @@ class PackingViewModel @Inject constructor(
             )
             val ok = runCatching { repo.addVoyageItem(voyageId, req) }.isSuccess
             if (ok) refreshInternal(voyageId)
+            onDone(ok)
+        }
+    }
+
+    /** Génère la "liste classique" via l'API (anti-doublon côté serveur) puis remplace la liste locale. */
+    fun generateClassic(voyageId: Int, onDone: (Boolean) -> Unit = {}) {
+        if (_isGenerating.value) return
+        viewModelScope.launch {
+            _isGenerating.value = true
+            val ok = runCatching {
+                _items.value = repo.generateVoyagePacking(voyageId).sortedBy { it.sort_order }
+            }.isSuccess
+            _isGenerating.value = false
             onDone(ok)
         }
     }

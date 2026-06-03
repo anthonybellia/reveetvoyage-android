@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -36,6 +37,7 @@ import kotlin.random.Random
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import be.reveetvoyage.app.data.api.ApiConfig
 import be.reveetvoyage.app.data.model.User
 import be.reveetvoyage.app.data.model.Voyage
 import be.reveetvoyage.app.data.model.VoyageEtape
@@ -45,6 +47,7 @@ import be.reveetvoyage.app.ui.components.*
 import be.reveetvoyage.app.ui.screens.admin.AdminBanner
 import be.reveetvoyage.app.ui.screens.admin.OwnerRow
 import be.reveetvoyage.app.ui.theme.*
+import coil.compose.AsyncImage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -65,6 +68,8 @@ class VoyagesViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
     val currentUser: StateFlow<User?> = userRepo.currentUser
+    // Admin "effectif" : vrai admin ET pas en mode aperçu utilisateur.
+    val isAdmin: StateFlow<Boolean> = userRepo.isAdmin
 
     init { reload() }
 
@@ -91,6 +96,7 @@ fun VoyagesScreen(onOpenVoyage: (Int) -> Unit, vm: VoyagesViewModel = hiltViewMo
     val voyages by vm.voyages.collectAsState()
     val isLoading by vm.isLoading.collectAsState()
     val user by vm.currentUser.collectAsState()
+    val isAdmin by vm.isAdmin.collectAsState()
     var filter by remember { mutableStateOf(VoyageFilter.All) }
 
     Box(
@@ -99,7 +105,7 @@ fun VoyagesScreen(onOpenVoyage: (Int) -> Unit, vm: VoyagesViewModel = hiltViewMo
             .background(Brush.linearGradient(listOf(RevYellow.copy(alpha = .08f), RevBackground)))
     ) {
         Column(modifier = Modifier.fillMaxSize().padding(top = 16.dp)) {
-            if (user?.role == "admin") {
+            if (isAdmin) {
                 Box(modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp)) {
                     AdminBanner()
                 }
@@ -148,7 +154,7 @@ fun VoyagesScreen(onOpenVoyage: (Int) -> Unit, vm: VoyagesViewModel = hiltViewMo
                             contentPadding = PaddingValues(bottom = 24.dp),
                         ) {
                             items(filtered, key = { it.id }) { v ->
-                                VoyageCard(v, onClick = { onOpenVoyage(v.id) })
+                                VoyageCard(v, isAdmin = isAdmin, onClick = { onOpenVoyage(v.id) })
                             }
                         }
                     }
@@ -159,7 +165,7 @@ fun VoyagesScreen(onOpenVoyage: (Int) -> Unit, vm: VoyagesViewModel = hiltViewMo
 }
 
 @Composable
-fun VoyageCard(v: Voyage, onClick: () -> Unit) {
+fun VoyageCard(v: Voyage, isAdmin: Boolean = false, onClick: () -> Unit) {
     GlassCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -176,8 +182,8 @@ fun VoyageCard(v: Voyage, onClick: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(v.titre, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 Text(v.destination, color = RevTextSecondary, fontSize = 12.sp)
-                // Admin-only owner row (no-op until Voyage.owner lands in data/model/Models.kt).
-                OwnerRow(owner = v.owner)
+                // Ligne propriétaire réservée à l'admin (masquée en mode aperçu utilisateur).
+                if (isAdmin) OwnerRow(owner = v.owner)
             }
             StatusBadge(v.statut_label, voyageStatutKind(v.statut))
             Icon(Icons.Default.ChevronRight, null, tint = RevTextSecondary.copy(alpha = .5f))
@@ -201,6 +207,24 @@ class VoyageDetailViewModel @Inject constructor(
     private val _toggling = MutableStateFlow<Set<Int>>(emptySet())
     val toggling: StateFlow<Set<Int>> = _toggling.asStateFlow()
 
+    // ===== Membres / collaboration =====
+    val currentUser: StateFlow<User?> = userRepo.currentUser
+    // Admin "effectif" : vrai admin ET pas en mode aperçu utilisateur.
+    val isAdmin: StateFlow<Boolean> = userRepo.isAdmin
+    private val _members = MutableStateFlow<List<be.reveetvoyage.app.data.model.VoyageMember>>(emptyList())
+    val members: StateFlow<List<be.reveetvoyage.app.data.model.VoyageMember>> = _members.asStateFlow()
+    private val _pending = MutableStateFlow<List<be.reveetvoyage.app.data.model.PendingInvite>>(emptyList())
+    val pending: StateFlow<List<be.reveetvoyage.app.data.model.PendingInvite>> = _pending.asStateFlow()
+    private val _membersLoading = MutableStateFlow(false)
+    val membersLoading: StateFlow<Boolean> = _membersLoading.asStateFlow()
+    private val _inviting = MutableStateFlow(false)
+    val inviting: StateFlow<Boolean> = _inviting.asStateFlow()
+    // Feedback éphémère affiché sous le champ d'invitation (succès ou erreur).
+    private val _memberFeedback = MutableStateFlow<String?>(null)
+    val memberFeedback: StateFlow<String?> = _memberFeedback.asStateFlow()
+    private val _removingMemberIds = MutableStateFlow<Set<Int>>(emptySet())
+    val removingMemberIds: StateFlow<Set<Int>> = _removingMemberIds.asStateFlow()
+
     fun load(id: Int) {
         viewModelScope.launch {
             runCatching { repo.detail(id) }.onSuccess { v ->
@@ -212,6 +236,52 @@ class VoyageDetailViewModel @Inject constructor(
                 if (notifEnabled) notifier.scheduleVoyage(v)
                 else notifier.cancelVoyage(v.id)
             }
+        }
+        loadMembers(id)
+    }
+
+    fun loadMembers(voyageId: Int) {
+        viewModelScope.launch {
+            _membersLoading.value = true
+            runCatching { repo.members(voyageId) }.onSuccess { resp ->
+                _members.value = resp.members
+                _pending.value = resp.pending
+            }
+            _membersLoading.value = false
+        }
+    }
+
+    fun invite(voyageId: Int, email: String) {
+        val cleaned = email.trim()
+        if (cleaned.isEmpty()) return
+        viewModelScope.launch {
+            _inviting.value = true
+            _memberFeedback.value = null
+            when (val res = repo.inviteMember(voyageId, cleaned)) {
+                is be.reveetvoyage.app.data.repo.InviteResult.Success -> {
+                    _memberFeedback.value = "Invitation traitée."
+                    loadMembers(voyageId)
+                }
+                is be.reveetvoyage.app.data.repo.InviteResult.Forbidden ->
+                    _memberFeedback.value = "Action réservée au propriétaire."
+                is be.reveetvoyage.app.data.repo.InviteResult.Conflict ->
+                    _memberFeedback.value = res.message
+                is be.reveetvoyage.app.data.repo.InviteResult.Error ->
+                    _memberFeedback.value = res.message
+            }
+            _inviting.value = false
+        }
+    }
+
+    fun clearMemberFeedback() { _memberFeedback.value = null }
+
+    fun removeMember(voyageId: Int, userId: Int) {
+        viewModelScope.launch {
+            _removingMemberIds.value = _removingMemberIds.value + userId
+            runCatching { repo.removeMember(voyageId, userId) }
+                .onSuccess { loadMembers(voyageId) }
+                .onFailure { _memberFeedback.value = "Suppression impossible." }
+            _removingMemberIds.value = _removingMemberIds.value - userId
         }
     }
 
@@ -400,6 +470,14 @@ fun VoyageDetailScreen(
     val voyage by vm.voyage.collectAsState()
     val etapes by vm.etapes.collectAsState()
     val toggling by vm.toggling.collectAsState()
+    val currentUser by vm.currentUser.collectAsState()
+    val isAdmin by vm.isAdmin.collectAsState()
+    val members by vm.members.collectAsState()
+    val pending by vm.pending.collectAsState()
+    val membersLoading by vm.membersLoading.collectAsState()
+    val inviting by vm.inviting.collectAsState()
+    val memberFeedback by vm.memberFeedback.collectAsState()
+    val removingMemberIds by vm.removingMemberIds.collectAsState()
     var pendingToggle by remember { mutableStateOf<VoyageEtape?>(null) }
     var celebrationBurst by remember { mutableStateOf(0) }
     var previousCompletedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
@@ -442,6 +520,8 @@ fun VoyageDetailScreen(
                     ) {
                     HeaderCard(v)
                     ProgressCard(done = etapes.count { it.is_completed }, total = etapes.size, value = vm.progress)
+                    // Récapitulatif de tous les billets du voyage (toutes étapes confondues).
+                    TicketsRecapCard(etapes = etapes)
                     IOSButton(
                         text = "Dépenses partagées",
                         onClick = { onOpenExpenses(voyageId) },
@@ -475,6 +555,25 @@ fun VoyageDetailScreen(
                             )
                         }
                     }
+
+                    // ===== Section Voyageurs / Membres (collaboration) =====
+                    // En mode aperçu utilisateur, l'admin perd les contrôles de gestion
+                    // (invitation / retrait) mais reste propriétaire si c'est son voyage.
+                    val isOwner = v.owner?.id != null && v.owner?.id == currentUser?.id
+                    VoyageMembersSection(
+                        members = members,
+                        pending = pending,
+                        isLoading = membersLoading,
+                        canManage = isOwner || isAdmin,
+                        currentUserId = currentUser?.id,
+                        inviting = inviting,
+                        feedback = memberFeedback,
+                        removingMemberIds = removingMemberIds,
+                        onInvite = { email -> vm.invite(voyageId, email) },
+                        onClearFeedback = { vm.clearMemberFeedback() },
+                        onRemove = { userId -> vm.removeMember(voyageId, userId) },
+                    )
+
                     Spacer(Modifier.height(20.dp))
                     }
                 }
@@ -599,6 +698,64 @@ private fun ProgressCard(done: Int, total: Int, value: Float) {
     }
 }
 
+// ============================================================
+// TicketsRecapCard — récapitulatif de tous les billets du voyage
+// (agrège les tickets de toutes les étapes). Chaque ligne montre une
+// icône (PDF / image), le titre de l'étape parente et ouvre le billet.
+// Masquée s'il n'y a aucun billet.
+// ============================================================
+@Composable
+private fun TicketsRecapCard(etapes: List<VoyageEtape>) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // Aplatit tous les billets en gardant le titre de l'étape parente.
+    val allTickets = etapes.flatMap { etape ->
+        etape.tickets.map { ticket -> etape to ticket }
+    }
+    if (allTickets.isEmpty()) return
+
+    GlassCard {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionTitle("Billets du voyage", Icons.Default.ConfirmationNumber)
+            allTickets.forEach { (etape, ticket) ->
+                val icon = when {
+                    ticket.is_pdf -> Icons.Default.PictureAsPdf
+                    ticket.is_image -> Icons.Default.Image
+                    else -> Icons.Default.ConfirmationNumber
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = RevOrange.copy(alpha = 0.08f),
+                    onClick = { openEtapeUrl(context, ticket.url) },
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
+                                .background(RevOrange.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(icon, null, tint = RevOrange, modifier = Modifier.size(22.dp))
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                ticket.name.takeIf { it.isNotBlank() } ?: etape.titre,
+                                color = RevBrown, fontWeight = FontWeight.Medium, fontSize = 14.sp,
+                                maxLines = 1,
+                            )
+                            Text(etape.titre, color = RevTextSecondary, fontSize = 11.sp, maxLines = 1)
+                        }
+                        Icon(Icons.Default.OpenInNew, null, tint = RevOrange, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun EtapeRow(
     etape: VoyageEtape,
@@ -618,6 +775,7 @@ private fun EtapeRow(
         }
         EtapeContent(
             etape,
+            onOpenDetail = onOpenDetail,
             modifier = Modifier.weight(1f).padding(bottom = if (isLast) 0.dp else 12.dp)
                 .clickable(onClick = onOpenDetail),
         )
@@ -646,22 +804,81 @@ private fun CheckBubble(etape: VoyageEtape, isToggling: Boolean, onToggle: () ->
     }
 }
 
-private fun stepIcon(type: String) = when (type) {
+// Icône Material pour chaque type d'étape (jeu complet aligné sur le web).
+private fun stepIcon(type: String): ImageVector = when (type) {
     "vol", "vol_aller", "vol_retour" -> Icons.Default.Flight
+    "train" -> Icons.Default.Train
     "hotel" -> Icons.Default.Hotel
     "activite" -> Icons.Default.DirectionsWalk
-    "transfert" -> Icons.Default.DirectionsCar
     "restaurant" -> Icons.Default.Restaurant
+    "brunch" -> Icons.Default.BrunchDining
+    "petit_dej" -> Icons.Default.BakeryDining
+    "cafe" -> Icons.Default.LocalCafe
+    "bar" -> Icons.Default.LocalBar
+    "transfert" -> Icons.Default.DirectionsCar
+    "visite" -> Icons.Default.Museum
+    "monument" -> Icons.Default.AccountBalance
+    "croisiere" -> Icons.Default.DirectionsBoat
     "note" -> Icons.Default.Description
+    "spa" -> Icons.Default.Spa
+    "shopping" -> Icons.Default.ShoppingBag
+    "plage" -> Icons.Default.BeachAccess
+    "sport" -> Icons.Default.DirectionsRun
+    "spectacle" -> Icons.Default.TheaterComedy
     "document" -> Icons.Default.InsertDriveFile
-    else -> Icons.Default.Circle
+    else -> Icons.Default.Place
+}
+
+// Libellé français pour chaque type d'étape.
+private fun stepLabel(type: String): String = when (type) {
+    "vol", "vol_aller" -> "Vol aller"
+    "vol_retour" -> "Vol retour"
+    "train" -> "Train"
+    "hotel" -> "Hôtel"
+    "activite" -> "Activité"
+    "restaurant" -> "Restaurant"
+    "brunch" -> "Brunch"
+    "petit_dej" -> "Petit-déjeuner"
+    "cafe" -> "Café"
+    "bar" -> "Bar"
+    "transfert" -> "Transfert"
+    "visite" -> "Visite"
+    "monument" -> "Monument"
+    "croisiere" -> "Croisière"
+    "note" -> "Note"
+    "spa" -> "Spa"
+    "shopping" -> "Shopping"
+    "plage" -> "Plage"
+    "sport" -> "Sport"
+    "spectacle" -> "Spectacle"
+    "document" -> "Document"
+    else -> type.replaceFirstChar { it.uppercase() }
 }
 
 @Composable
-private fun EtapeContent(etape: VoyageEtape, modifier: Modifier = Modifier) {
+private fun EtapeContent(
+    etape: VoyageEtape,
+    onOpenDetail: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // Cover de l'étape : on privilégie `cover`, sinon on retombe sur `image`.
+    val coverUrl = (etape.cover ?: etape.image)?.takeIf { it.isNotBlank() }
     GlassCard(modifier = modifier.alpha(if (etape.is_completed) 0.75f else 1f), padding = 14) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.Top) {
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Vignette de couverture (à la place d'une carte si présente),
+                // taille/placement proches de la mini-carte.
+                if (coverUrl != null) {
+                    AsyncImage(
+                        model = resolveEtapeUrl(coverUrl),
+                        contentDescription = etape.titre,
+                        modifier = Modifier
+                            .size(width = 64.dp, height = 64.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         etape.titre,
@@ -678,14 +895,28 @@ private fun EtapeContent(etape: VoyageEtape, modifier: Modifier = Modifier) {
                         }
                     }
                 }
+                // Badge billet : indique la présence de tickets attachés.
+                if (etape.hasTickets) {
+                    Icon(
+                        Icons.Default.ConfirmationNumber,
+                        contentDescription = "Billets",
+                        tint = RevOrange,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
                 etape.date?.take(10)?.let {
                     Column(horizontalAlignment = Alignment.End) {
                         Text(it, color = RevOrange, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        etape.heure?.let { h -> Text(h, color = RevTextSecondary, fontSize = 10.sp) }
+                        // Heure optionnelle : on n'affiche rien (ni séparateur) si elle est vide.
+                        etape.heure?.takeIf { h -> h.isNotBlank() }?.let { h ->
+                            Text(h, color = RevTextSecondary, fontSize = 10.sp)
+                        }
                     }
                 }
             }
-            etape.description?.takeIf { it.isNotBlank() }?.let {
+            // Aperçu note : description sinon contenu_html nettoyé de ses balises,
+            // pour ne pas masquer les étapes dont le contenu vit dans contenu_html.
+            etape.notePreview.takeIf { it.isNotBlank() }?.let {
                 Text(it, color = RevTextSecondary, fontSize = 12.sp, maxLines = 3)
             }
             if (etape.cout != null && etape.cout > 0) {
@@ -693,6 +924,254 @@ private fun EtapeContent(etape: VoyageEtape, modifier: Modifier = Modifier) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(Icons.Default.Euro, null, tint = RevOrange, modifier = Modifier.size(11.dp))
                     Text("${etape.cout.toInt()} €", color = RevOrange, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            // Boutons rapides : ouvrir le premier billet, ou afficher les infos détaillées.
+            val firstTicketUrl = etape.tickets.firstOrNull()?.url
+            val hasInfos = etape.notePreview.isNotBlank()
+            if (firstTicketUrl != null || hasInfos) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (firstTicketUrl != null) {
+                        EtapeChip(
+                            icon = Icons.Default.ConfirmationNumber,
+                            label = "Billet",
+                            onClick = { openEtapeUrl(context, firstTicketUrl) },
+                        )
+                    }
+                    if (hasInfos) {
+                        EtapeChip(
+                            icon = Icons.Default.Info,
+                            label = "Infos",
+                            onClick = onOpenDetail,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Petite puce cliquable utilisée dans la ligne d'étape (billet / infos).
+@Composable
+private fun EtapeChip(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(RevOrange.copy(alpha = 0.12f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(icon, null, tint = RevOrange, modifier = Modifier.size(14.dp))
+        Text(label, color = RevOrange, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+// Résout une URL relative renvoyée par l'API en URL absolue.
+private fun resolveEtapeUrl(url: String): String =
+    if (url.startsWith("http")) url else ApiConfig.SITE_BASE + url
+
+// Ouvre une URL de billet/document via ACTION_VIEW (lecteur PDF / navigateur).
+private fun openEtapeUrl(context: android.content.Context, url: String) {
+    val resolved = resolveEtapeUrl(url)
+    try {
+        val intent = android.content.Intent(
+            android.content.Intent.ACTION_VIEW,
+            android.net.Uri.parse(resolved),
+        ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(
+            context, "Impossible d'ouvrir le billet", android.widget.Toast.LENGTH_SHORT,
+        ).show()
+    }
+}
+
+// ============================================================
+// VoyageMembersSection — invitation + liste des membres / invitations
+// Le champ d'invitation et les boutons de suppression ne s'affichent
+// que pour le propriétaire du voyage ou un admin (canManage).
+// ============================================================
+@Composable
+fun VoyageMembersSection(
+    members: List<be.reveetvoyage.app.data.model.VoyageMember>,
+    pending: List<be.reveetvoyage.app.data.model.PendingInvite>,
+    isLoading: Boolean,
+    canManage: Boolean,
+    currentUserId: Int?,
+    inviting: Boolean,
+    feedback: String?,
+    removingMemberIds: Set<Int>,
+    onInvite: (String) -> Unit,
+    onClearFeedback: () -> Unit,
+    onRemove: (Int) -> Unit,
+) {
+    var email by remember { mutableStateOf("") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionTitle("Voyageurs & membres", Icons.Default.Group)
+
+        // Bloc d'invitation : visible uniquement pour le propriétaire / admin.
+        if (canManage) {
+            GlassCard {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Inviter une personne par e-mail",
+                        color = RevBrown,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                    )
+                    be.reveetvoyage.app.ui.components.IOSTextField(
+                        value = email,
+                        onValueChange = {
+                            email = it
+                            if (feedback != null) onClearFeedback()
+                        },
+                        placeholder = "adresse@email.com",
+                        icon = Icons.Default.Email,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Email,
+                        ),
+                    )
+                    IOSButton(
+                        text = "Inviter",
+                        onClick = {
+                            onInvite(email)
+                            email = ""
+                        },
+                        icon = Icons.Default.PersonAdd,
+                        style = IOSButtonStyle.Primary,
+                        isLoading = inviting,
+                        enabled = email.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    feedback?.let {
+                        Text(it, color = RevTextSecondary, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        when {
+            isLoading && members.isEmpty() && pending.isEmpty() -> {
+                GlassCard {
+                    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp, color = RevOrange)
+                    }
+                }
+            }
+            members.isEmpty() && pending.isEmpty() -> {
+                GlassCard {
+                    Text(
+                        "Aucun membre pour le moment.",
+                        color = RevTextSecondary,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    )
+                }
+            }
+            else -> {
+                // Membres actifs
+                members.forEach { m ->
+                    MemberRow(
+                        name = m.name,
+                        email = m.email,
+                        roleLabel = if (m.is_owner) "Propriétaire" else memberRoleLabel(m.role),
+                        isOwner = m.is_owner,
+                        isPending = false,
+                        // On peut retirer un membre non-propriétaire et qui n'est pas soi-même.
+                        canRemove = canManage && !m.is_owner && m.id != currentUserId,
+                        isRemoving = m.id in removingMemberIds,
+                        onRemove = { onRemove(m.id) },
+                    )
+                }
+                // Invitations en attente (grisées)
+                pending.forEach { p ->
+                    MemberRow(
+                        name = p.email,
+                        email = "Invitation envoyée",
+                        roleLabel = memberRoleLabel(p.role),
+                        isOwner = false,
+                        isPending = true,
+                        canRemove = false,
+                        isRemoving = false,
+                        onRemove = {},
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun memberRoleLabel(role: String): String = when (role) {
+    "owner" -> "Propriétaire"
+    "admin" -> "Admin"
+    "collaborator" -> "Collaborateur"
+    "viewer" -> "Lecteur"
+    else -> role.replaceFirstChar { it.uppercase() }
+}
+
+@Composable
+private fun MemberRow(
+    name: String,
+    email: String,
+    roleLabel: String,
+    isOwner: Boolean,
+    isPending: Boolean,
+    canRemove: Boolean,
+    isRemoving: Boolean,
+    onRemove: () -> Unit,
+) {
+    GlassCard {
+        Row(
+            modifier = Modifier.fillMaxWidth().alpha(if (isPending) 0.55f else 1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).clip(CircleShape).background(
+                    Brush.linearGradient(listOf(RevYellow.copy(alpha = .55f), RevOrange.copy(alpha = .55f)))
+                ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (isPending) Icons.Default.MailOutline else Icons.Default.Person,
+                    null, tint = Color.White, modifier = Modifier.size(20.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(name, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text(email, color = RevTextSecondary, fontSize = 12.sp)
+            }
+            // Chip de rôle
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(if (isOwner) RevOrange.copy(alpha = .20f) else RevYellow.copy(alpha = .20f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    roleLabel,
+                    color = if (isOwner) RevOrange else RevBrown,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            if (canRemove) {
+                if (isRemoving) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = RevRed)
+                } else {
+                    IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Retirer",
+                            tint = RevRed, modifier = Modifier.size(20.dp))
+                    }
                 }
             }
         }

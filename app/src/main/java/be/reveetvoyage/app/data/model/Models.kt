@@ -112,6 +112,8 @@ data class VoyageEtape(
     val type: String,
     val titre: String,
     val description: String? = null,
+    // Description détaillée (HTML riche provenant de l'éditeur), peut être nulle
+    val contenu_html: String? = null,
     val date: String? = null,
     val heure: String? = null,
     val heure_retour: String? = null,
@@ -124,14 +126,52 @@ data class VoyageEtape(
     val numero_ref: String? = null,
     val cout: Double? = null,
     val image: String? = null,
+    // Image de couverture de l'étape (même URL que `image` côté API, exposée séparément)
+    val cover: String? = null,
     val fichier: String? = null,
     val images: List<String> = emptyList(),
+    // Billets / tickets attachés à l'étape (peut être vide)
+    val tickets: List<EtapeTicket> = emptyList(),
     val is_completed: Boolean = false,
     val completed_at: String? = null,
+    // Mode de transport inter-étape ("car","train","plane","bus","navette","taxi","walk")
+    val connector_mode: String? = null,
+    val connector_duration: String? = null, // ex: "1h25"
+    val connector_distance: String? = null, // ex: "1061 km · "
 ) {
     val hasCoordinates: Boolean get() = latitude != null && longitude != null
     val hasAttachments: Boolean get() = image != null || fichier != null || images.isNotEmpty()
+    val hasTickets: Boolean get() = tickets.isNotEmpty()
+    val hasConnector: Boolean get() = !connector_mode.isNullOrBlank() ||
+        !connector_duration.isNullOrBlank() || !connector_distance.isNullOrBlank()
+
+    /** Aperçu texte de la note : description sinon contenu_html sans balises HTML.
+     *  Évite que les étapes dont le contenu n'existe que dans contenu_html
+     *  (éditeur riche web) n'affichent rien dans la liste. */
+    val notePreview: String get() {
+        description?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        val html = contenu_html ?: return ""
+        if (html.isEmpty()) return ""
+        return html
+            .replace(Regex("(?i)<br\\s*/?>|<hr[^>]*>|</p>|</div>|</li>"), " ")
+            .replace(Regex("<[^>]+>"), "")
+            .replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<")
+            .replace("&gt;", ">").replace("&#39;", "'").replace("&apos;", "'")
+            .replace("&quot;", "\"")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
 }
+
+// Billet / ticket attaché à une étape (PDF ou image)
+@Serializable
+data class EtapeTicket(
+    val url: String,
+    val name: String = "",
+    val ext: String = "",
+    val is_pdf: Boolean = false,
+    val is_image: Boolean = false,
+)
 
 @Serializable
 data class Devis(
@@ -204,6 +244,10 @@ data class Message(
 
 @Serializable
 data class SendMessageRequest(val body: String)
+
+/** Corps de requête pour supprimer un billet d'étape (identifié par son url). */
+@Serializable
+data class DeleteTicketRequest(val url: String)
 
 @Serializable
 data class UnreadCountResponse(val count: Int)
@@ -351,6 +395,39 @@ data class CreateExpenseRequest(
     val location_name: String? = null,
     val location_latitude: Double? = null,
     val location_longitude: Double? = null,
+)
+
+// ===== Voyage Members / Collaboration =====
+
+// Un membre actif (lié à un compte utilisateur) du voyage.
+@Serializable
+data class VoyageMember(
+    val id: Int,
+    val name: String,
+    val email: String,
+    val role: String,
+    val is_owner: Boolean = false,
+)
+
+// Une invitation en attente : la personne n'a pas encore de compte / pas encore accepté.
+@Serializable
+data class PendingInvite(
+    val email: String,
+    val role: String = "collaborator",
+)
+
+// Réponse de GET /voyages/{id}/members
+@Serializable
+data class MembersResponse(
+    val members: List<VoyageMember> = emptyList(),
+    val pending: List<PendingInvite> = emptyList(),
+)
+
+// Corps de POST /voyages/{id}/members
+@Serializable
+data class InviteRequest(
+    val email: String,
+    val role: String = "collaborator",
 )
 
 // ===== Packing List =====

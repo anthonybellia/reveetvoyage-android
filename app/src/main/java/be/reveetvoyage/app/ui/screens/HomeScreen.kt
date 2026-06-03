@@ -57,6 +57,8 @@ class HomeViewModel @Inject constructor(
     val unread: StateFlow<Int> = _unread.asStateFlow()
 
     val currentUser: StateFlow<User?> = userRepo.currentUser
+    // Admin "effectif" : vrai admin ET pas en mode aperçu utilisateur.
+    val isAdmin: StateFlow<Boolean> = userRepo.isAdmin
 
     init { load() }
 
@@ -84,6 +86,7 @@ fun HomeScreen(
     val devis by vm.devis.collectAsState()
     val unread by vm.unread.collectAsState()
     val user by vm.currentUser.collectAsState()
+    val isAdmin by vm.isAdmin.collectAsState()
     val weather by weatherVm.weather.collectAsState()
     val weatherLoading by weatherVm.loading.collectAsState()
     val locationLabel by weatherVm.locationLabel.collectAsState()
@@ -107,7 +110,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             HeroHeader(user, unread, onOpenNotifications)
-            if (user?.role == "admin") {
+            if (isAdmin) {
                 AdminBanner()
             }
             be.reveetvoyage.app.ui.components.WeatherCard(
@@ -154,7 +157,7 @@ fun HomeScreen(
                         }
                     }
                 } else {
-                    devis.take(3).forEach { d -> DevisRowMini(d) }
+                    devis.take(3).forEach { d -> DevisRowMini(d, isAdmin = isAdmin) }
                 }
             }
             Spacer(Modifier.height(20.dp))
@@ -235,7 +238,7 @@ private fun QuickCard(
 }
 
 @Composable
-private fun DevisRowMini(d: Devis) {
+private fun DevisRowMini(d: Devis, isAdmin: Boolean = false) {
     val (label, kind) = devisStatutLabel(d.statut)
     GlassCard(modifier = Modifier.fillMaxWidth(), padding = 14) {
         Row(verticalAlignment = Alignment.CenterVertically,
@@ -251,8 +254,8 @@ private fun DevisRowMini(d: Devis) {
                     Text(it.replace('_', ' ').replaceFirstChar(Char::titlecase),
                          color = RevTextSecondary, fontSize = 11.sp)
                 }
-                // Admin-only owner sub-row (always null until Devis.owner is added to data/model).
-                OwnerRow(owner = d.owner)
+                // Ligne propriétaire réservée à l'admin (masquée en mode aperçu utilisateur).
+                if (isAdmin) OwnerRow(owner = d.owner)
             }
             StatusBadge(label, kind)
         }

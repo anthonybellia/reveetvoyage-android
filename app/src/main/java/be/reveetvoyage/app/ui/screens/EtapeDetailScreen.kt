@@ -3,15 +3,21 @@ package be.reveetvoyage.app.ui.screens
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.pdf.PdfRenderer
 import android.location.Address
 import android.location.Geocoder
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.ParcelFileDescriptor
 import android.view.MotionEvent
+import android.widget.TextView
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -33,11 +39,15 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,8 +55,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.text.HtmlCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import be.reveetvoyage.app.data.api.ApiConfig
+import be.reveetvoyage.app.data.model.EtapeTicket
 import be.reveetvoyage.app.data.model.VoyageEtape
 import be.reveetvoyage.app.ui.components.*
 import be.reveetvoyage.app.ui.components.IOSAlertDialog
@@ -55,10 +67,18 @@ import be.reveetvoyage.app.ui.components.IOSButtonStyle
 import be.reveetvoyage.app.ui.components.IOSTopBar
 import be.reveetvoyage.app.ui.theme.*
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
+import coil.compose.rememberAsyncImagePainter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import java.io.File
+import java.security.MessageDigest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -141,7 +161,20 @@ fun EtapeDetailScreen(
                         val rows = buildInfoRows(etape)
                         if (rows.isNotEmpty()) InfoCard(rows)
 
-                        if (!etape.description.isNullOrBlank()) {
+                        // Mode de transport inter-étape (proche de la section date/heure)
+                        if (etape.hasConnector) ConnectorCard(etape)
+
+                        // Description détaillée : on privilégie le HTML riche (contenu_html),
+                        // sinon on retombe sur la description en texte brut.
+                        val richHtml = etape.contenu_html?.takeIf { it.isNotBlank() }
+                        if (richHtml != null) {
+                            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    SectionTitle("Notes", Icons.Default.Description)
+                                    HtmlText(html = richHtml)
+                                }
+                            }
+                        } else if (!etape.description.isNullOrBlank()) {
                             GlassCard(modifier = Modifier.fillMaxWidth()) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionTitle("Notes", Icons.Default.Description)
@@ -158,6 +191,15 @@ fun EtapeDetailScreen(
                                 onImageLongPress = { url -> downloadFile(context, url, guessFileName(url)) },
                                 onDocumentOpen = { url -> openDocument(context, url) },
                                 onDocumentDownload = { url -> downloadFile(context, url, guessFileName(url)) },
+                            )
+                        }
+
+                        // --- Billets / Tickets section ---
+                        if (etape.hasTickets) {
+                            TicketsSection(
+                                tickets = etape.tickets,
+                                onTicketOpen = { url -> openDocument(context, url) },
+                                onImageTap = { url -> fullScreenImageUrl = url },
                             )
                         }
 
@@ -363,6 +405,333 @@ private fun AttachmentsSection(
                 }
             }
         }
+    }
+}
+
+// ============================================================
+// Tickets / Billets Section
+// Liste chaque billet attaché ; icône selon le type (PDF / image).
+// Sous chaque ligne, on affiche un aperçu inline :
+//  - image  -> AsyncImage Coil, clic = visualiseur plein écran
+//  - pdf    -> aperçu 1ère page (PdfRenderer), clic = ouverture ACTION_VIEW
+//  - autre  -> ligne cliquable seule (comportement historique)
+// ============================================================
+@Composable
+private fun TicketsSection(
+    tickets: List<EtapeTicket>,
+    onTicketOpen: (String) -> Unit,
+    onImageTap: (String) -> Unit,
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionTitle("Billets / Tickets", Icons.Default.ConfirmationNumber)
+            tickets.forEach { ticket ->
+                val icon = when {
+                    ticket.is_pdf -> Icons.Default.PictureAsPdf
+                    ticket.is_image -> Icons.Default.Image
+                    else -> Icons.Default.ConfirmationNumber
+                }
+                val label = ticket.name.takeIf { it.isNotBlank() } ?: guessFileName(ticket.url)
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = RevOrange.copy(alpha = 0.08f),
+                        onClick = { onTicketOpen(ticket.url) },
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(RevOrange.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    icon,
+                                    contentDescription = null,
+                                    tint = RevOrange,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    label,
+                                    color = RevBrown,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    "Appuyer pour ouvrir",
+                                    color = RevTextSecondary,
+                                    fontSize = 11.sp,
+                                )
+                            }
+                            Icon(
+                                Icons.Default.OpenInNew,
+                                contentDescription = null,
+                                tint = RevOrange,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+
+                    // Aperçu inline sous la ligne, selon le type de billet.
+                    when {
+                        ticket.is_image -> TicketImageInline(
+                            url = ticket.url,
+                            onTap = { onImageTap(ticket.url) },
+                        )
+                        ticket.is_pdf -> PdfThumbnailInline(
+                            url = ticket.url,
+                            onTap = { onTicketOpen(ticket.url) },
+                            fallbackIcon = icon,
+                        )
+                        // autre type : aucune prévisualisation, ligne seule.
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// TicketImageInline : aperçu image plein largeur (Coil), clic -> viewer.
+// ============================================================
+@Composable
+private fun TicketImageInline(
+    url: String,
+    onTap: () -> Unit,
+) {
+    val resolved = remember(url) { resolveUrl(url) }
+    val painter = rememberAsyncImagePainter(model = resolved)
+    val state = painter.state
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(200.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(RevOrange.copy(alpha = 0.06f))
+            .clickable { onTap() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painter,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+        when (state) {
+            is AsyncImagePainter.State.Loading -> {
+                CircularProgressIndicator(
+                    color = RevOrange,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+            is AsyncImagePainter.State.Error -> {
+                Icon(
+                    Icons.Default.BrokenImage,
+                    contentDescription = null,
+                    tint = RevTextSecondary,
+                    modifier = Modifier.size(32.dp),
+                )
+            }
+            else -> {
+                // Succès : overlay zoom en bas à droite, comme la galerie.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(RevBrown.copy(alpha = 0.6f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.ZoomIn,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// PdfThumbnailInline : aperçu de la 1ère page d'un PDF.
+// Télécharge le PDF vers le cache (Dispatchers.IO), l'ouvre via
+// PdfRenderer, rend la page 0 dans un Bitmap. Le téléchargement et le
+// rendu sont mis en cache disque (cacheDir) pour éviter les re-DL.
+// ============================================================
+@Composable
+private fun PdfThumbnailInline(
+    url: String,
+    onTap: () -> Unit,
+    fallbackIcon: ImageVector,
+) {
+    val context = LocalContext.current
+    val resolved = remember(url) { resolveUrl(url) }
+
+    val bitmapState by produceState<PdfThumbState>(
+        initialValue = PdfThumbState.Loading,
+        key1 = resolved,
+    ) {
+        value = try {
+            val bmp = withContext(Dispatchers.IO) {
+                renderPdfFirstPage(context, resolved)
+            }
+            if (bmp != null) PdfThumbState.Success(bmp.asImageBitmap())
+            else PdfThumbState.Error
+        } catch (t: Throwable) {
+            PdfThumbState.Error
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(240.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(RevOrange.copy(alpha = 0.06f))
+            .clickable { onTap() },
+        contentAlignment = Alignment.Center,
+    ) {
+        when (val s = bitmapState) {
+            is PdfThumbState.Loading -> {
+                CircularProgressIndicator(
+                    color = RevOrange,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+            is PdfThumbState.Success -> {
+                Image(
+                    bitmap = s.image,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                // Badge PDF en bas à droite.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(RevBrown.copy(alpha = 0.6f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.PictureAsPdf,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Text("PDF", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            is PdfThumbState.Error -> {
+                // Fallback : icône type (comportement historique visuel).
+                Icon(
+                    fallbackIcon,
+                    contentDescription = null,
+                    tint = RevOrange,
+                    modifier = Modifier.size(40.dp),
+                )
+            }
+        }
+    }
+}
+
+private sealed interface PdfThumbState {
+    object Loading : PdfThumbState
+    data class Success(val image: ImageBitmap) : PdfThumbState
+    object Error : PdfThumbState
+}
+
+// Télécharge (avec cache disque) puis rend la 1ère page d'un PDF en Bitmap.
+// À appeler hors du main thread (Dispatchers.IO).
+private fun renderPdfFirstPage(context: Context, resolvedUrl: String): Bitmap? {
+    val cacheFile = downloadToCache(context, resolvedUrl) ?: return null
+
+    var pfd: ParcelFileDescriptor? = null
+    var renderer: PdfRenderer? = null
+    var page: PdfRenderer.Page? = null
+    return try {
+        pfd = ParcelFileDescriptor.open(cacheFile, ParcelFileDescriptor.MODE_READ_ONLY)
+        renderer = PdfRenderer(pfd)
+        if (renderer.pageCount <= 0) return null
+        page = renderer.openPage(0)
+
+        // Largeur cible raisonnable pour limiter la mémoire ; hauteur proportionnelle.
+        val targetWidth = 1080
+        val ratio = if (page.width > 0) page.height.toFloat() / page.width.toFloat() else 1.4f
+        val targetHeight = (targetWidth * ratio).toInt().coerceAtLeast(1)
+
+        val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+        // Fond blanc : un PDF rendu sans fond donne du transparent -> texte noir invisible.
+        bitmap.eraseColor(android.graphics.Color.WHITE)
+        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+        bitmap
+    } catch (t: Throwable) {
+        null
+    } finally {
+        try { page?.close() } catch (_: Throwable) {}
+        try { renderer?.close() } catch (_: Throwable) {}
+        try { pfd?.close() } catch (_: Throwable) {}
+    }
+}
+
+// Télécharge un fichier vers cacheDir, réutilise le cache si déjà présent.
+// Nom de fichier dérivé d'un hash de l'URL pour stabilité entre recompositions.
+private fun downloadToCache(context: Context, resolvedUrl: String): File? {
+    return try {
+        val hash = MessageDigest.getInstance("MD5")
+            .digest(resolvedUrl.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        val cacheFile = File(context.cacheDir, "ticket_pdf_$hash.pdf")
+        if (cacheFile.exists() && cacheFile.length() > 0) return cacheFile
+
+        val client = OkHttpClient()
+        val request = Request.Builder().url(resolvedUrl).build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return null
+            val body = response.body ?: return null
+            val tmp = File(context.cacheDir, "ticket_pdf_${hash}.tmp")
+            body.byteStream().use { input ->
+                tmp.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            if (tmp.length() <= 0) {
+                tmp.delete()
+                return null
+            }
+            if (!tmp.renameTo(cacheFile)) {
+                // Repli si le rename échoue (cross-device improbable en cacheDir).
+                tmp.copyTo(cacheFile, overwrite = true)
+                tmp.delete()
+            }
+            cacheFile
+        }
+    } catch (t: Throwable) {
+        null
     }
 }
 
@@ -660,26 +1029,139 @@ private fun buildInfoRows(e: VoyageEtape): List<InfoRow> {
     return rows
 }
 
+// ============================================================
+// HtmlText : rend une chaîne HTML formatée (pas de balises brutes)
+// via un TextView Android enveloppé dans un AndroidView.
+// ============================================================
+@Composable
+private fun HtmlText(html: String) {
+    val density = LocalDensity.current
+    val textColor = RevBrown.toArgb()
+    // Taille de texte en px équivalente à 14.sp pour rester cohérent avec le reste de l'écran
+    val textSizePx = with(density) { 14.sp.toPx() }
+    AndroidView(
+        modifier = Modifier.fillMaxWidth(),
+        factory = { ctx ->
+            TextView(ctx).apply {
+                setTextColor(textColor)
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, textSizePx)
+                setLineSpacing(0f, 1.2f)
+            }
+        },
+        update = { tv ->
+            tv.text = HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_COMPACT)
+        },
+    )
+}
+
+// ============================================================
+// ConnectorCard : affiche le mode de transport inter-étape
+// (icône + libellé FR + durée · distance).
+// ============================================================
+@Composable
+private fun ConnectorCard(etape: VoyageEtape) {
+    val mode = etape.connector_mode
+    val icon = connectorIcon(mode)
+    val label = connectorLabel(mode)
+    // Concatène durée et distance : "1061 km · 1h25" (la distance fournie inclut déjà " · ")
+    val detail = buildString {
+        etape.connector_distance?.takeIf { it.isNotBlank() }?.let { append(it.trim()) }
+        etape.connector_duration?.takeIf { it.isNotBlank() }?.let {
+            if (isNotEmpty() && !endsWith("·")) append(" · ")
+            append(it.trim())
+        }
+    }.trim().removeSuffix("·").trim()
+
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(
+                modifier = Modifier.size(36.dp).clip(CircleShape)
+                    .background(RevOrange.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, null, tint = RevOrange, modifier = Modifier.size(20.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Trajet vers cette étape", color = RevTextSecondary,
+                    fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (detail.isNotBlank()) "$label · $detail" else label,
+                    color = RevBrown, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+    }
+}
+
+private fun connectorIcon(mode: String?): ImageVector = when (mode) {
+    "car" -> Icons.Default.DirectionsCar
+    "train" -> Icons.Default.Train
+    "plane" -> Icons.Default.Flight
+    "bus" -> Icons.Default.DirectionsBus
+    "navette" -> Icons.Default.AirportShuttle
+    "taxi" -> Icons.Default.LocalTaxi
+    "walk" -> Icons.Default.DirectionsWalk
+    else -> Icons.Default.Place
+}
+
+private fun connectorLabel(mode: String?): String = when (mode) {
+    "car" -> "Voiture"
+    "train" -> "Train"
+    "plane" -> "Avion"
+    "bus" -> "Bus"
+    "navette" -> "Navette"
+    "taxi" -> "Taxi"
+    "walk" -> "À pied"
+    else -> "Trajet"
+}
+
+// Icône Material pour chaque type d'étape (jeu complet aligné sur le web).
 private fun stepIcon(type: String): ImageVector = when (type) {
     "vol", "vol_aller", "vol_retour" -> Icons.Default.Flight
+    "train" -> Icons.Default.Train
     "hotel" -> Icons.Default.Hotel
     "activite" -> Icons.Default.DirectionsWalk
-    "transfert" -> Icons.Default.DirectionsCar
     "restaurant" -> Icons.Default.Restaurant
+    "brunch" -> Icons.Default.BrunchDining
+    "petit_dej" -> Icons.Default.BakeryDining
+    "cafe" -> Icons.Default.LocalCafe
+    "bar" -> Icons.Default.LocalBar
+    "transfert" -> Icons.Default.DirectionsCar
+    "visite" -> Icons.Default.Museum
+    "monument" -> Icons.Default.AccountBalance
+    "croisiere" -> Icons.Default.DirectionsBoat
     "note" -> Icons.Default.Description
+    "spa" -> Icons.Default.Spa
+    "shopping" -> Icons.Default.ShoppingBag
+    "plage" -> Icons.Default.BeachAccess
+    "sport" -> Icons.Default.DirectionsRun
+    "spectacle" -> Icons.Default.TheaterComedy
     "document" -> Icons.Default.InsertDriveFile
-    else -> Icons.Default.Circle
+    else -> Icons.Default.Place
 }
 
 private fun typeLabel(type: String): String = when (type) {
-    "vol_aller" -> "Vol aller"
+    "vol_aller", "vol" -> "Vol aller"
     "vol_retour" -> "Vol retour"
-    "vol" -> "Vol"
+    "train" -> "Train"
     "hotel" -> "Hôtel"
     "activite" -> "Activité"
-    "transfert" -> "Transfert"
     "restaurant" -> "Restaurant"
+    "brunch" -> "Brunch"
+    "petit_dej" -> "Petit-déjeuner"
+    "cafe" -> "Café"
+    "bar" -> "Bar"
+    "transfert" -> "Transfert"
+    "visite" -> "Visite"
+    "monument" -> "Monument"
+    "croisiere" -> "Croisière"
     "note" -> "Note"
+    "spa" -> "Spa"
+    "shopping" -> "Shopping"
+    "plage" -> "Plage"
+    "sport" -> "Sport"
+    "spectacle" -> "Spectacle"
     "document" -> "Document"
     else -> type.replaceFirstChar { it.uppercase() }
 }

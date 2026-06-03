@@ -83,6 +83,8 @@ fun PackingScreen(
         }
     }
 
+    val isGenerating by vm.isGenerating.collectAsState()
+
     val grouped = remember(items, categories) { vm.grouped(categories) }
     val (checked, total) = remember(items) { vm.progress }
 
@@ -144,17 +146,45 @@ fun PackingScreen(
 
                 when {
                     isLoading && items.isEmpty() -> LoadingFull()
-                    items.isEmpty() -> EmptyState(
-                        icon = Icons.Default.Inventory2,
-                        title = "Liste de bagage vide",
-                        subtitle = "Appuie sur + pour ajouter un article.",
-                    )
+                    items.isEmpty() -> Column(
+                        modifier = Modifier.fillMaxSize().padding(32.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Icon(
+                            Icons.Default.Inventory2,
+                            null,
+                            tint = RevOrange.copy(alpha = 0.4f),
+                            modifier = Modifier.size(64.dp),
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text("Liste de bagage vide", color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Génère une liste classique pour démarrer, ou appuie sur + pour ajouter un article.",
+                            color = RevTextSecondary,
+                            fontSize = 13.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                        Spacer(Modifier.height(20.dp))
+                        GenerateClassicButton(
+                            isGenerating = isGenerating,
+                            onClick = { vm.generateClassic(voyageId) },
+                        )
+                    }
                     else -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
+                            item(key = "generate-classic") {
+                                GenerateClassicButton(
+                                    isGenerating = isGenerating,
+                                    onClick = { vm.generateClassic(voyageId) },
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                )
+                            }
                             grouped.forEach { (category, catItems) ->
                                 item(key = "header-${category?.id ?: "none"}") {
                                     CategoryHeader(category)
@@ -213,6 +243,37 @@ fun PackingScreen(
             },
             onDismiss = { pendingDelete = null },
         )
+    }
+}
+
+// ============================================================
+// "Générer une liste classique" button
+// ============================================================
+@Composable
+private fun GenerateClassicButton(
+    isGenerating: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = !isGenerating,
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, RevOrange),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = RevOrange),
+    ) {
+        if (isGenerating) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = RevOrange,
+            )
+        } else {
+            Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Générer une liste classique", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        }
     }
 }
 

@@ -49,6 +49,33 @@ interface ApiService {
         @Path("etapeId") etapeId: Int,
     ): WrappedResponse<VoyageEtape>
 
+    // ===== Étape : image de couverture & billets (admin) =====
+    // Renvoient l'étape mise à jour (EtapeResource côté backend).
+
+    @Multipart
+    @POST("voyages/{voyageId}/etapes/{etapeId}/cover")
+    suspend fun uploadEtapeCover(
+        @Path("voyageId") voyageId: Int,
+        @Path("etapeId") etapeId: Int,
+        @Part cover: MultipartBody.Part,
+    ): WrappedResponse<VoyageEtape>
+
+    @Multipart
+    @POST("voyages/{voyageId}/etapes/{etapeId}/tickets")
+    suspend fun uploadEtapeTicket(
+        @Path("voyageId") voyageId: Int,
+        @Path("etapeId") etapeId: Int,
+        @Part ticket: MultipartBody.Part,
+    ): WrappedResponse<VoyageEtape>
+
+    // Suppression d'un billet identifié par son `url` (corps JSON sur un DELETE).
+    @HTTP(method = "DELETE", path = "voyages/{voyageId}/etapes/{etapeId}/tickets", hasBody = true)
+    suspend fun deleteEtapeTicket(
+        @Path("voyageId") voyageId: Int,
+        @Path("etapeId") etapeId: Int,
+        @Body req: DeleteTicketRequest,
+    ): WrappedResponse<VoyageEtape>
+
     // Devis
     @GET("devis")
     suspend fun devis(
@@ -107,6 +134,26 @@ interface ApiService {
         @Query("lat") lat: Double? = null,
         @Query("lng") lng: Double? = null,
     ): PaginatedResponse<Place>
+
+    // ===== Voyage Members / Collaboration =====
+    // L'auth (token Bearer) est ajoutée automatiquement par AuthInterceptor : pas de header manuel.
+
+    @GET("voyages/{id}/members")
+    suspend fun getMembers(@Path("id") id: Int): MembersResponse
+
+    // On renvoie un Response<ResponseBody> brut pour pouvoir distinguer les codes HTTP
+    // (403 = pas propriétaire/admin, 422 = déjà propriétaire) côté repository.
+    @POST("voyages/{id}/members")
+    suspend fun inviteMember(
+        @Path("id") id: Int,
+        @Body body: InviteRequest,
+    ): retrofit2.Response<okhttp3.ResponseBody>
+
+    @DELETE("voyages/{id}/members/{userId}")
+    suspend fun removeMember(
+        @Path("id") id: Int,
+        @Path("userId") userId: Int,
+    ): Map<String, String>
 
     // ===== Voyage Expenses (Tricount-like) =====
 
@@ -177,6 +224,11 @@ interface ApiService {
     suspend fun voyagePacking(
         @Path("id") voyageId: Int,
         @Query("since") since: String? = null,
+    ): PaginatedResponse<VoyagePackingItem>
+
+    @POST("voyages/{id}/packing/generate")
+    suspend fun generateVoyagePacking(
+        @Path("id") voyageId: Int,
     ): PaginatedResponse<VoyagePackingItem>
 
     @POST("voyages/{id}/packing")

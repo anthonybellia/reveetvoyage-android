@@ -52,11 +52,18 @@ class SettingsViewModel @Inject constructor(
     val userRepo: UserRepository,
 ) : ViewModel() {
     val currentUser: StateFlow<User?> = userRepo.currentUser
+    // Vrai admin (ignore l'aperçu) : contrôle l'affichage du toggle d'aperçu.
+    val isRealAdmin: StateFlow<Boolean> = userRepo.isRealAdmin
+    // État courant du mode aperçu utilisateur.
+    val previewAsUser: StateFlow<Boolean> = userRepo.previewAsUser
 
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast
 
     fun consumeToast() { _toast.value = null }
+
+    // Bascule admin <-> aperçu utilisateur (UI uniquement, pas les permissions data).
+    fun togglePreviewAsUser() { userRepo.togglePreviewAsUser() }
 
     init {
         viewModelScope.launch { userRepo.refresh() }
@@ -84,6 +91,56 @@ class SettingsViewModel @Inject constructor(
 
 private val RowDividerColor = Color(0x14000000)
 
+// ============================================================
+// Carte de bascule admin <-> aperçu utilisateur.
+// Visible uniquement pour les vrais admins. Bascule un drapeau session
+// (UserRepository.previewAsUser) qui masque les contrôles admin dans toute
+// l'app, sans toucher aux permissions de données côté API.
+// ============================================================
+@Composable
+private fun AdminPreviewToggleCard(previewAsUser: Boolean, onToggle: () -> Unit) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), padding = 14) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable { onToggle() },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).clip(CircleShape)
+                    .background(RevOrange.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (previewAsUser) Icons.Default.Visibility else Icons.Default.AdminPanelSettings,
+                    contentDescription = null,
+                    tint = RevOrange,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    if (previewAsUser) "Aperçu utilisateur" else "Mode admin",
+                    color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+                )
+                Text(
+                    if (previewAsUser) "Tu vois l'app comme un client"
+                    else "Tu vois les contrôles d'administration",
+                    color = RevTextSecondary, fontSize = 12.sp,
+                )
+            }
+            // Le switch ON = mode aperçu utilisateur activé.
+            Switch(
+                checked = previewAsUser,
+                onCheckedChange = { onToggle() },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = RevOrange,
+                ),
+            )
+        }
+    }
+}
+
 @Composable
 private fun RowDivider() {
     HorizontalDivider(
@@ -109,6 +166,8 @@ fun SettingsScreen(
     vm: SettingsViewModel = hiltViewModel(),
 ) {
     val user by vm.currentUser.collectAsState()
+    val isRealAdmin by vm.isRealAdmin.collectAsState()
+    val previewAsUser by vm.previewAsUser.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
 
     Box(
@@ -133,6 +192,14 @@ fun SettingsScreen(
                         Text(user!!.email, color = RevTextSecondary, fontSize = 13.sp)
                     }
                 }
+            }
+
+            // Bascule admin <-> aperçu utilisateur (réservée aux vrais admins).
+            if (isRealAdmin) {
+                AdminPreviewToggleCard(
+                    previewAsUser = previewAsUser,
+                    onToggle = { vm.togglePreviewAsUser() },
+                )
             }
 
             // Compte

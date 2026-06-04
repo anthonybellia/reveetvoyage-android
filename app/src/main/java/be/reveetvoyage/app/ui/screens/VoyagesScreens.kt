@@ -846,13 +846,24 @@ private fun TicketsRecapCard(etapes: List<VoyageEtape>) {
                                 Icon(stepIcon(etape.type), null, tint = RevOrange, modifier = Modifier.size(22.dp))
                             }
                         }
-                        // Nom de l'étape parente uniquement (plus de nom de fichier / token).
-                        Text(
-                            etape.titre,
-                            color = RevBrown, fontWeight = FontWeight.Medium, fontSize = 14.sp,
-                            maxLines = 1,
-                            modifier = Modifier.weight(1f),
-                        )
+                        // Nom de l'étape + passager attribué (plus de nom de fichier / token).
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                etape.titre,
+                                color = RevBrown, fontWeight = FontWeight.Medium, fontSize = 14.sp,
+                                maxLines = 1,
+                            )
+                            ticket.participant_name?.takeIf { it.isNotBlank() }?.let { pax ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Icon(Icons.Default.Person, null, tint = RevOrange,
+                                        modifier = Modifier.size(12.dp))
+                                    Text(pax, color = RevOrange, fontSize = 11.sp, maxLines = 1)
+                                }
+                            }
+                        }
                         Icon(Icons.Default.OpenInNew, null, tint = RevOrange, modifier = Modifier.size(20.dp))
                     }
                 }

@@ -473,6 +473,16 @@ private fun TicketsSection(
                                     color = RevTextSecondary,
                                     fontSize = 11.sp,
                                 )
+                                ticket.participant_name?.takeIf { it.isNotBlank() }?.let { pax ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Icon(Icons.Default.Person, null, tint = RevOrange,
+                                            modifier = Modifier.size(12.dp))
+                                        Text(pax, color = RevOrange, fontSize = 11.sp, maxLines = 1)
+                                    }
+                                }
                             }
                             Icon(
                                 Icons.Default.OpenInNew,

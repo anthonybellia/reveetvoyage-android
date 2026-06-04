@@ -171,6 +171,9 @@ data class EtapeTicket(
     val ext: String = "",
     val is_pdf: Boolean = false,
     val is_image: Boolean = false,
+    // Passager auquel le billet est attribué (VoyageParticipant), si défini.
+    val participant_id: Int? = null,
+    val participant_name: String? = null,
 )
 
 @Serializable

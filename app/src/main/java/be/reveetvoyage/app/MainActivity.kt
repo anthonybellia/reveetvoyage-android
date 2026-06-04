@@ -12,17 +12,28 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.view.WindowCompat
+import be.reveetvoyage.app.data.api.OfflineWriteOutbox
 import be.reveetvoyage.app.ui.RootScreen
 import be.reveetvoyage.app.ui.theme.ReveEtVoyageTheme
 import be.reveetvoyage.app.ui.theme.RevBackground
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    // File d'écritures hors-ligne : on tente de la vider à chaque retour au
+    // premier plan (le réseau peut être revenu pendant le voyage).
+    @Inject lateinit var offlineOutbox: OfflineWriteOutbox
+
     private val notifPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* user granted/denied — silently ignored */ }
+
+    override fun onResume() {
+        super.onResume()
+        offlineOutbox.flushAsync()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

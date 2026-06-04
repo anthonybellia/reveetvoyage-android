@@ -29,10 +29,26 @@ class AuthViewModel @Inject constructor(
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
     fun bootstrap() {
+        if (!repo.isAuthenticated()) {
+            _isAuthenticated.value = false
+            return
+        }
+        // Token présent : on considère l'utilisateur connecté immédiatement.
+        // Indispensable pour ouvrir l'app hors-ligne (avion) sans renvoyer au login.
+        _isAuthenticated.value = true
         viewModelScope.launch {
-            if (repo.isAuthenticated()) {
-                _currentUser.value = repo.loadCurrentUser()
-                _isAuthenticated.value = _currentUser.value != null
+            when (val res = repo.checkSession()) {
+                is AuthRepository.SessionCheck.Valid -> {
+                    _currentUser.value = res.user
+                    _isAuthenticated.value = true
+                }
+                AuthRepository.SessionCheck.Invalid -> {
+                    // Token réellement rejeté par le serveur : on déconnecte.
+                    _isAuthenticated.value = false
+                }
+                AuthRepository.SessionCheck.Offline -> {
+                    // Pas de réseau : on garde la session, la couche data sert le cache.
+                }
             }
         }
     }

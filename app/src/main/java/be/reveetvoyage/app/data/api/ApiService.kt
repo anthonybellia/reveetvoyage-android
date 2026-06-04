@@ -49,6 +49,17 @@ interface ApiService {
         @Path("etapeId") etapeId: Int,
     ): WrappedResponse<VoyageEtape>
 
+    /**
+     * Idempotent : fixe l'état terminé/en attente d'une étape.
+     * Utilisé par l'outbox hors-ligne (rejouable sans risque, last-write-wins).
+     */
+    @PUT("voyages/{voyageId}/etapes/{etapeId}/completion")
+    suspend fun setEtapeCompletion(
+        @Path("voyageId") voyageId: Int,
+        @Path("etapeId") etapeId: Int,
+        @Body req: EtapeCompletionRequest,
+    ): WrappedResponse<VoyageEtape>
+
     // ===== Étape : image de couverture & billets (admin) =====
     // Renvoient l'étape mise à jour (EtapeResource côté backend).
 

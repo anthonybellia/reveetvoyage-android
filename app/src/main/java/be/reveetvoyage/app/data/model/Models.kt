@@ -305,6 +305,35 @@ data class SendMessageRequest(val body: String)
 @Serializable
 data class DeleteTicketRequest(val url: String)
 
+/**
+ * Corps de la requête idempotente « set » de l'état terminé d'une étape.
+ * On envoie l'ÉTAT CIBLE (pas un toggle relatif) : rejouable sans risque par
+ * l'outbox hors-ligne (last-write-wins). Miroir d'iOS `setEtapeCompletion`.
+ */
+@Serializable
+data class EtapeCompletionRequest(val is_completed: Boolean)
+
+/** Type d'écriture différée supportée hors-ligne (actions booléennes idempotentes). */
+@Serializable
+enum class OfflineWriteKind { etapeCompletion }
+
+/**
+ * Une écriture faite hors-ligne, en attente de synchronisation. On mémorise
+ * l'ÉTAT CIBLE désiré (pas une action relative), ce qui rend le rejeu idempotent.
+ * Miroir de `OfflineWrite` côté iOS.
+ */
+@Serializable
+data class OfflineWrite(
+    val kind: OfflineWriteKind,
+    val voyageId: Int,
+    val entityId: Int,        // etapeId
+    val value: Boolean,       // état désiré (true = fait)
+    val updatedAt: Long,      // epoch millis, pour l'ordre de rejeu
+) {
+    /** Clé stable par entité : plusieurs basculements se réduisent au dernier état (LWW). */
+    val id: String get() = "${kind.name}:$voyageId:$entityId"
+}
+
 @Serializable
 data class UnreadCountResponse(val count: Int)
 
@@ -364,6 +393,7 @@ data class VoyageParticipant(
     val user_id: Int? = null,
     val display_name: String,
     val is_guest: Boolean = false,
+    val avatar_url: String? = null,
 )
 
 @Serializable
@@ -376,6 +406,7 @@ data class VoyageExpenseSplit(
 data class ExpensePaidBy(
     val id: Int,
     val display_name: String,
+    val avatar_url: String? = null,
 )
 
 @Serializable
@@ -468,6 +499,7 @@ data class VoyageMember(
     val email: String,
     val role: String,
     val is_owner: Boolean = false,
+    val avatar_url: String? = null,
 )
 
 // Une invitation en attente : la personne n'a pas encore de compte / pas encore accepté.

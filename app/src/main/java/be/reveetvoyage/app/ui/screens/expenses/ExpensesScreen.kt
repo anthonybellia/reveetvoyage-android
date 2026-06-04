@@ -416,12 +416,20 @@ private fun ExpenseRow(exp: VoyageExpense, onClick: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(exp.title, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1)
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    "Payé par ${exp.paid_by?.display_name ?: "—"}",
-                    color = RevTextSecondary,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    AvatarView(
+                        firstName = exp.paid_by?.display_name?.split(" ")?.getOrNull(0) ?: "",
+                        lastName = exp.paid_by?.display_name?.split(" ")?.getOrNull(1) ?: "",
+                        avatarPath = exp.paid_by?.avatar_url,
+                        size = 18,
+                    )
+                    Text(
+                        "Payé par ${exp.paid_by?.display_name ?: "—"}",
+                        color = RevTextSecondary,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                    )
+                }
                 if (!exp.location_name.isNullOrBlank()) {
                     Spacer(Modifier.height(2.dp))
                     Row(
@@ -658,16 +666,12 @@ private fun ParticipantRow(p: VoyageParticipant, onRemove: () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val initials = p.display_name.split(" ").take(2).mapNotNull { it.firstOrNull()?.uppercase() }.joinToString("")
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(Brush.linearGradient(listOf(RevYellow, RevOrange, RevRed))),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(initials.ifBlank { "?" }, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-        }
+        AvatarView(
+            firstName = p.display_name.split(" ").getOrNull(0) ?: "",
+            lastName = p.display_name.split(" ").getOrNull(1) ?: "",
+            avatarPath = p.avatar_url,
+            size = 36,
+        )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(p.display_name, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)

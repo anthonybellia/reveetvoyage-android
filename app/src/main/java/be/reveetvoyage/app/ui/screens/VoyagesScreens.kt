@@ -38,6 +38,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import be.reveetvoyage.app.data.api.ApiConfig
+import be.reveetvoyage.app.data.model.OfflineWrite
+import be.reveetvoyage.app.data.model.OfflineWriteKind
 import be.reveetvoyage.app.data.model.User
 import be.reveetvoyage.app.data.model.Voyage
 import be.reveetvoyage.app.data.model.VoyageEtape
@@ -206,6 +208,7 @@ class VoyageDetailViewModel @Inject constructor(
     private val repo: VoyageRepository,
     private val notifier: be.reveetvoyage.app.notifications.NotificationScheduler,
     private val userRepo: be.reveetvoyage.app.data.repo.UserRepository,
+    private val outbox: be.reveetvoyage.app.data.api.OfflineWriteOutbox,
 ) : ViewModel() {
     private val _voyage = MutableStateFlow<Voyage?>(null)
     val voyage: StateFlow<Voyage?> = _voyage.asStateFlow()
@@ -328,18 +331,33 @@ class VoyageDetailViewModel @Inject constructor(
     fun toggle(voyageId: Int, etape: VoyageEtape) {
         viewModelScope.launch {
             _toggling.value = _toggling.value + etape.id
-            // optimistic
+            val desired = !etape.is_completed
+            // UI optimiste : on bascule localement d'abord.
             _etapes.value = _etapes.value.map {
-                if (it.id == etape.id) it.copy(is_completed = !it.is_completed) else it
+                if (it.id == etape.id) it.copy(is_completed = desired) else it
             }
-            runCatching { repo.toggleEtape(voyageId, etape.id) }
+            // Endpoint idempotent « set » : rejouable sans risque par l'outbox.
+            runCatching { repo.setEtapeCompletion(voyageId, etape.id, desired) }
                 .onSuccess { updated ->
                     _etapes.value = _etapes.value.map { if (it.id == updated.id) updated else it }
                 }
-                .onFailure {
-                    // revert
-                    _etapes.value = _etapes.value.map {
-                        if (it.id == etape.id) it.copy(is_completed = !it.is_completed) else it
+                .onFailure { err ->
+                    val code = (err as? retrofit2.HttpException)?.code()
+                    if (code == 401 || code == 403) {
+                        // Session réellement rejetée : on annule l'optimiste.
+                        _etapes.value = _etapes.value.map {
+                            if (it.id == etape.id) it.copy(is_completed = etape.is_completed) else it
+                        }
+                    } else {
+                        // Hors-ligne / serveur injoignable : on GARDE l'état optimiste et
+                        // on met l'écriture en file pour resynchroniser au retour du réseau.
+                        outbox.enqueue(
+                            OfflineWrite(
+                                kind = OfflineWriteKind.etapeCompletion,
+                                voyageId = voyageId, entityId = etape.id,
+                                value = desired, updatedAt = System.currentTimeMillis(),
+                            )
+                        )
                     }
                 }
             _toggling.value = _toggling.value - etape.id
@@ -1289,6 +1307,7 @@ fun VoyageMembersSection(
                     MemberRow(
                         name = m.name,
                         email = m.email,
+                        avatarPath = m.avatar_url,
                         roleLabel = if (m.is_owner) "Propriétaire" else memberRoleLabel(m.role),
                         isOwner = m.is_owner,
                         isPending = false,
@@ -1372,6 +1391,7 @@ private fun memberRoleLabel(role: String): String = when (role) {
 private fun MemberRow(
     name: String,
     email: String,
+    avatarPath: String? = null,
     roleLabel: String,
     isOwner: Boolean,
     isPending: Boolean,
@@ -1385,15 +1405,24 @@ private fun MemberRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(
-                modifier = Modifier.size(40.dp).clip(CircleShape).background(
-                    Brush.linearGradient(listOf(RevYellow.copy(alpha = .55f), RevOrange.copy(alpha = .55f)))
-                ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    if (isPending) Icons.Default.MailOutline else Icons.Default.Person,
-                    null, tint = Color.White, modifier = Modifier.size(20.dp),
+            if (isPending) {
+                Box(
+                    modifier = Modifier.size(40.dp).clip(CircleShape).background(
+                        Brush.linearGradient(listOf(RevYellow.copy(alpha = .55f), RevOrange.copy(alpha = .55f)))
+                    ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.MailOutline,
+                        null, tint = Color.White, modifier = Modifier.size(20.dp),
+                    )
+                }
+            } else {
+                AvatarView(
+                    firstName = name.split(" ").getOrNull(0) ?: "",
+                    lastName = name.split(" ").getOrNull(1) ?: "",
+                    avatarPath = avatarPath,
+                    size = 40,
                 )
             }
             Column(modifier = Modifier.weight(1f)) {

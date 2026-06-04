@@ -40,6 +40,10 @@ class VoyageRepository @Inject constructor(
     suspend fun detail(id: Int) = api.voyageDetail(id).data
     suspend fun toggleEtape(voyageId: Int, etapeId: Int) = api.toggleEtape(voyageId, etapeId).data
 
+    /** Fixe l'état terminé d'une étape (idempotent). Rejouable par l'outbox hors-ligne. */
+    suspend fun setEtapeCompletion(voyageId: Int, etapeId: Int, isCompleted: Boolean) =
+        api.setEtapeCompletion(voyageId, etapeId, EtapeCompletionRequest(isCompleted)).data
+
     // ===== Étape : couverture & billets (admin) =====
 
     /** Upload / remplace l'image de couverture de l'étape. Renvoie l'étape à jour. */

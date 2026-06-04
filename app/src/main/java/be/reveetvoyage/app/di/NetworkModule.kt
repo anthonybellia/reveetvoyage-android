@@ -3,6 +3,7 @@ package be.reveetvoyage.app.di
 import be.reveetvoyage.app.data.api.ApiConfig
 import be.reveetvoyage.app.data.api.ApiService
 import be.reveetvoyage.app.data.api.AuthInterceptor
+import be.reveetvoyage.app.data.api.OfflineCacheInterceptor
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides
@@ -28,9 +29,14 @@ object NetworkModule {
     }
 
     @Provides @Singleton
-    fun provideOkHttp(authInterceptor: AuthInterceptor): OkHttpClient {
+    fun provideOkHttp(
+        authInterceptor: AuthInterceptor,
+        offlineCacheInterceptor: OfflineCacheInterceptor,
+    ): OkHttpClient {
         val log = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
         return OkHttpClient.Builder()
+            // En premier (le plus externe) : sert le cache disque si le réseau tombe.
+            .addInterceptor(offlineCacheInterceptor)
             .addInterceptor(authInterceptor)
             .addInterceptor(log)
             .connectTimeout(15, TimeUnit.SECONDS)

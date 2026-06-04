@@ -524,12 +524,29 @@ fun VoyageDetailScreen(
     var celebrationBurst by remember { mutableStateOf(0) }
     var previousCompletedIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
 
+    // Invite d'arrivée géolocalisée (Feature 2) : étape la plus proche, non
+    // terminée, dans un rayon de 200 m, non encore proposée dans la session.
+    var arrivalEtape by remember { mutableStateOf<VoyageEtape?>(null) }
+    var arrivalHandled by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    val arrivalContext = androidx.compose.ui.platform.LocalContext.current
+
     LaunchedEffect(etapes) {
         val nowCompleted = etapes.filter { it.is_completed }.map { it.id }.toSet()
         if (previousCompletedIds.isNotEmpty() && (nowCompleted - previousCompletedIds).isNotEmpty()) {
             celebrationBurst++
         }
         previousCompletedIds = nowCompleted
+
+        if (arrivalEtape == null) {
+            val here = LocationHelper.lastKnownLocation(arrivalContext)
+            if (here != null) {
+                arrivalEtape = etapes
+                    .filter { !it.is_completed && it.id !in arrivalHandled && it.latitude != null && it.longitude != null }
+                    .map { it to haversineMeters(here.first, here.second, it.latitude!!, it.longitude!!) }
+                    .filter { it.second <= 200.0 }
+                    .minByOrNull { it.second }?.first
+            }
+        }
     }
 
     LaunchedEffect(voyageId) { vm.load(voyageId) }
@@ -648,6 +665,30 @@ fun VoyageDetailScreen(
                 onDismiss = { pendingToggle = null },
             )
         }
+
+        // Invite d'arrivée géolocalisée (Feature 2).
+        arrivalEtape?.let { e ->
+            be.reveetvoyage.app.ui.components.IOSAlertDialog(
+                title = "Vous êtes arrivé à ${e.titre} ?",
+                message = e.lieu?.takeIf { it.isNotBlank() }
+                    ?.let { "Vous semblez être à proximité de $it." }
+                    ?: "Vous semblez être à proximité de cette étape.",
+                confirmText = "Oui, marquer terminée",
+                cancelText = "Pas encore",
+                isDestructive = false,
+                onConfirm = {
+                    val wasCompleted = e.is_completed
+                    vm.toggle(voyageId, e)
+                    if (!wasCompleted) celebrationBurst++
+                    arrivalHandled = arrivalHandled + e.id
+                    arrivalEtape = null
+                },
+                onDismiss = {
+                    arrivalHandled = arrivalHandled + e.id
+                    arrivalEtape = null
+                },
+            )
+        }
     }
 }
 
@@ -754,6 +795,17 @@ private fun ProgressCard(done: Int, total: Int, value: Float) {
 // icône (PDF / image), le titre de l'étape parente et ouvre le billet.
 // Masquée s'il n'y a aucun billet.
 // ============================================================
+// Distance en mètres entre deux points GPS (formule de Haversine).
+private fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val r = 6371000.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
 // TimelineConnector — label de trajet inter-étapes (N → N+1) affiché
 // entre deux étapes consécutives dans la timeline : icône transport +
 // mode · distance · durée. Calqué sur le rendu web.

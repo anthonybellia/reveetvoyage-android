@@ -762,11 +762,9 @@ private fun TicketsRecapCard(etapes: List<VoyageEtape>) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             SectionTitle("Billets du voyage", Icons.Default.ConfirmationNumber)
             allTickets.forEach { (etape, ticket) ->
-                val icon = when {
-                    ticket.is_pdf -> Icons.Default.PictureAsPdf
-                    ticket.is_image -> Icons.Default.Image
-                    else -> Icons.Default.ConfirmationNumber
-                }
+                // Visuel : photo de couverture de l'étape si disponible,
+                // sinon icône du type d'étape.
+                val coverUrl = (etape.cover ?: etape.image)?.takeIf { it.isNotBlank() }
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -778,21 +776,29 @@ private fun TicketsRecapCard(etapes: List<VoyageEtape>) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Box(
-                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
-                                .background(RevOrange.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(icon, null, tint = RevOrange, modifier = Modifier.size(22.dp))
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                ticket.name.takeIf { it.isNotBlank() } ?: etape.titre,
-                                color = RevBrown, fontWeight = FontWeight.Medium, fontSize = 14.sp,
-                                maxLines = 1,
+                        if (coverUrl != null) {
+                            AsyncImage(
+                                model = resolveEtapeUrl(coverUrl),
+                                contentDescription = etape.titre,
+                                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)),
+                                contentScale = ContentScale.Crop,
                             )
-                            Text(etape.titre, color = RevTextSecondary, fontSize = 11.sp, maxLines = 1)
+                        } else {
+                            Box(
+                                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
+                                    .background(RevOrange.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(stepIcon(etape.type), null, tint = RevOrange, modifier = Modifier.size(22.dp))
+                            }
                         }
+                        // Nom de l'étape parente uniquement (plus de nom de fichier / token).
+                        Text(
+                            etape.titre,
+                            color = RevBrown, fontWeight = FontWeight.Medium, fontSize = 14.sp,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f),
+                        )
                         Icon(Icons.Default.OpenInNew, null, tint = RevOrange, modifier = Modifier.size(20.dp))
                     }
                 }

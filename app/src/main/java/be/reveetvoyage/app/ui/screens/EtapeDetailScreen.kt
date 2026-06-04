@@ -1083,7 +1083,7 @@ private fun ConnectorCard(etape: VoyageEtape) {
                 Icon(icon, null, tint = RevOrange, modifier = Modifier.size(20.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text("Trajet vers cette étape", color = RevTextSecondary,
+                Text("Trajet vers la prochaine étape", color = RevTextSecondary,
                     fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     if (detail.isNotBlank()) "$label · $detail" else label,

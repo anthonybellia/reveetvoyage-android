@@ -595,6 +595,11 @@ fun VoyageDetailScreen(
                                 onToggle = { pendingToggle = etape },
                                 onOpenDetail = { onOpenEtape(etape.id) },
                             )
+                            // Trajet inter-étapes (N → N+1), affiché entre deux
+                            // étapes consécutives, comme sur le web.
+                            if (index < etapes.lastIndex && etape.hasConnector) {
+                                TimelineConnector(etape)
+                            }
                         }
                     }
 
@@ -749,6 +754,55 @@ private fun ProgressCard(done: Int, total: Int, value: Float) {
 // icône (PDF / image), le titre de l'étape parente et ouvre le billet.
 // Masquée s'il n'y a aucun billet.
 // ============================================================
+// TimelineConnector — label de trajet inter-étapes (N → N+1) affiché
+// entre deux étapes consécutives dans la timeline : icône transport +
+// mode · distance · durée. Calqué sur le rendu web.
+@Composable
+private fun TimelineConnector(etape: VoyageEtape) {
+    val icon = when (etape.connector_mode) {
+        "car" -> Icons.Default.DirectionsCar
+        "train" -> Icons.Default.Train
+        "plane" -> Icons.Default.Flight
+        "bus" -> Icons.Default.DirectionsBus
+        "navette" -> Icons.Default.AirportShuttle
+        "taxi" -> Icons.Default.LocalTaxi
+        "walk" -> Icons.Default.DirectionsWalk
+        else -> Icons.Default.Place
+    }
+    val label = when (etape.connector_mode) {
+        "car" -> "Voiture"
+        "train" -> "Train"
+        "plane" -> "Avion"
+        "bus" -> "Bus"
+        "navette" -> "Navette"
+        "taxi" -> "Taxi"
+        "walk" -> "À pied"
+        else -> "Trajet"
+    }
+    // La distance peut arriver avec un séparateur résiduel ("1061 km · ").
+    val distance = etape.connector_distance?.trim()?.trim('·', ' ')?.takeIf { it.isNotBlank() }
+    val duration = etape.connector_duration?.trim()?.takeIf { it.isNotBlank() }
+    val text = listOfNotNull(label, distance, duration).joinToString(" · ")
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(shape = RoundedCornerShape(50), color = RevOrange.copy(alpha = 0.10f)) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(icon, null, tint = RevTextSecondary, modifier = Modifier.size(14.dp))
+                Text(text, color = RevTextSecondary, fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium, maxLines = 1)
+            }
+        }
+    }
+}
+
 @Composable
 private fun TicketsRecapCard(etapes: List<VoyageEtape>) {
     val context = androidx.compose.ui.platform.LocalContext.current

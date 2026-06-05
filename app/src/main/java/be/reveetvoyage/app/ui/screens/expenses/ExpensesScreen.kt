@@ -163,6 +163,7 @@ fun ExpensesScreen(
                     ExpensesTab.Depenses -> ExpensesTabContent(
                         expenses = expenses,
                         settlement = settlement,
+                        participantCount = participants.size,
                         isLoading = isLoading,
                         onExpenseTap = { actionSheetExpense = it },
                     )
@@ -327,6 +328,7 @@ fun ExpensesScreen(
 private fun ExpensesTabContent(
     expenses: List<VoyageExpense>,
     settlement: be.reveetvoyage.app.data.model.SettlementResponse?,
+    participantCount: Int,
     isLoading: Boolean,
     onExpenseTap: (VoyageExpense) -> Unit,
 ) {
@@ -336,7 +338,7 @@ private fun ExpensesTabContent(
     }
     if (expenses.isEmpty()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            TotalCard(total = settlement?.total ?: 0.0, byCategory = settlement?.by_category ?: emptyMap())
+            TotalCard(total = settlement?.total ?: 0.0, byCategory = settlement?.by_category ?: emptyMap(), participantCount = participantCount)
             EmptyState(
                 icon = Icons.Default.Receipt,
                 title = "Aucune dépense",
@@ -352,7 +354,7 @@ private fun ExpensesTabContent(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            TotalCard(total = settlement?.total ?: 0.0, byCategory = settlement?.by_category ?: emptyMap())
+            TotalCard(total = settlement?.total ?: 0.0, byCategory = settlement?.by_category ?: emptyMap(), participantCount = participantCount)
         }
         items(expenses, key = { it.id }) { exp ->
             ExpenseRow(exp, onClick = { onExpenseTap(exp) })
@@ -362,7 +364,7 @@ private fun ExpensesTabContent(
 }
 
 @Composable
-private fun TotalCard(total: Double, byCategory: Map<String, Long>) {
+private fun TotalCard(total: Double, byCategory: Map<String, Long>, participantCount: Int) {
     GlassCard(modifier = Modifier.fillMaxWidth(), padding = 18) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Total dépensé", color = RevTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
@@ -372,6 +374,14 @@ private fun TotalCard(total: Double, byCategory: Map<String, Long>) {
                 fontWeight = FontWeight.Bold,
                 fontSize = 32.sp,
             )
+            if (participantCount > 1 && total > 0) {
+                Text(
+                    "${formatAmount(total / participantCount)} par personne",
+                    color = RevBrown,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                )
+            }
             if (byCategory.isNotEmpty()) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(byCategory.entries.toList(), key = { it.key }) { (key, cents) ->

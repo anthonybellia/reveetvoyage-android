@@ -22,13 +22,18 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -175,27 +180,114 @@ fun VoyagesScreen(onOpenVoyage: (Int) -> Unit, vm: VoyagesViewModel = hiltViewMo
 
 @Composable
 fun VoyageCard(v: Voyage, isAdmin: Boolean = false, onClick: () -> Unit) {
-    GlassCard(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
+    val coverUrl = v.cover_thumb ?: v.cover_image
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .shadow(elevation = 8.dp, shape = RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .clickable { onClick() }
+    ) {
+        // Background: cover image or gradient fallback
+        if (coverUrl != null) {
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = v.titre,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            // Fallback gradient with airplane icon
             Box(
-                modifier = Modifier.size(50.dp).clip(CircleShape).background(
-                    Brush.linearGradient(listOf(RevYellow.copy(alpha = .6f), RevOrange.copy(alpha = .6f)))
-                ),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(RevYellow, RevOrange),
+                            start = Offset(0f, 0f),
+                            end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                        )
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Default.Flight, null, tint = Color.White)
+                Icon(
+                    Icons.Default.Flight,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.2f),
+                    modifier = Modifier.size(80.dp).graphicsLayer { rotationZ = -15f }
+                )
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(v.titre, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                Text(v.destination, color = RevTextSecondary, fontSize = 12.sp)
-                // Ligne propriétaire réservée à l'admin (masquée en mode aperçu utilisateur).
-                if (isAdmin) OwnerRow(owner = v.owner)
+        }
+
+        // Dark gradient overlay
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.3f),
+                            Color.Black.copy(alpha = 0.7f)
+                        )
+                    )
+                )
+        )
+
+        // Content
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            // Status badge top-right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                StatusBadge(v.statut_label, voyageStatutKind(v.statut))
             }
-            StatusBadge(v.statut_label, voyageStatutKind(v.statut))
-            Icon(Icons.Default.ChevronRight, null, tint = RevTextSecondary.copy(alpha = .5f))
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Title
+            Text(
+                v.titre,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = LocalTextStyle.current.copy(
+                    shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f)
+                )
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Destination
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(
+                    Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    v.destination,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    style = LocalTextStyle.current.copy(
+                        shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 3f)
+                    )
+                )
+            }
+
+            // Owner (admin only)
+            if (isAdmin) OwnerRow(owner = v.owner)
         }
     }
 }

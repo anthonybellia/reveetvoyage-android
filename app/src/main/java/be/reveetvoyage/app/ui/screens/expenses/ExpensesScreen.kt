@@ -467,8 +467,21 @@ private fun ExpenseRow(exp: VoyageExpense, onClick: () -> Unit) {
                     fontSize = 15.sp,
                 )
                 Spacer(Modifier.height(2.dp))
-                exp.spent_at?.take(10)?.let {
-                    Text(it, color = RevTextSecondary, fontSize = 11.sp)
+                exp.spent_at?.let { iso ->
+                    try {
+                        val instant = java.time.Instant.parse(iso)
+                        val zoneId = java.time.ZoneId.systemDefault()
+                        val local = instant.atZone(zoneId).toLocalDateTime()
+                        val dateStr = local.toLocalDate().toString()
+                        val timeStr = local.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(dateStr, color = RevTextSecondary, fontSize = 11.sp)
+                            Text(timeStr, color = RevTextSecondary, fontSize = 11.sp)
+                        }
+                    } catch (e: Exception) {
+                        Text("—", color = RevTextSecondary, fontSize = 11.sp)
+                    }
                 }
             }
         }

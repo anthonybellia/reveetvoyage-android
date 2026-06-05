@@ -132,6 +132,8 @@ data class VoyageEtape(
     val images: List<String> = emptyList(),
     // Billets / tickets attachés à l'étape (peut être vide)
     val tickets: List<EtapeTicket> = emptyList(),
+    val codes: List<EtapeCode> = emptyList(),
+    val linked_app: LinkedApp? = null,
     val is_completed: Boolean = false,
     val completed_at: String? = null,
     // Mode de transport inter-étape ("car","train","plane","bus","navette","taxi","walk")
@@ -174,6 +176,31 @@ data class EtapeTicket(
     // Passager auquel le billet est attribué (VoyageParticipant), si défini.
     val participant_id: Int? = null,
     val participant_name: String? = null,
+)
+
+@Serializable
+data class EtapeCode(
+    val label: String = "",
+    val value: String = "",
+)
+
+@Serializable
+data class LinkedApp(
+    val name: String = "",
+    val icon_url: String? = null,
+    val app_store_url: String? = null,
+    val play_store_url: String? = null,
+    val website_url: String? = null,
+    val notes: String? = null,
+    val credentials: List<LinkedAppCredential> = emptyList(),
+) {
+    val hasCredentials: Boolean get() = credentials.isNotEmpty()
+}
+
+@Serializable
+data class LinkedAppCredential(
+    val label: String = "",
+    val value: String = "",
 )
 
 @Serializable

@@ -57,7 +57,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.text.HtmlCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import android.content.ClipData
+import android.content.ClipboardManager
 import be.reveetvoyage.app.data.api.ApiConfig
+import be.reveetvoyage.app.data.model.EtapeCode
+import be.reveetvoyage.app.data.model.LinkedApp
 import be.reveetvoyage.app.data.model.EtapeTicket
 import be.reveetvoyage.app.data.model.VoyageEtape
 import be.reveetvoyage.app.ui.components.*
@@ -183,6 +187,16 @@ fun EtapeDetailScreen(
                             }
                         }
 
+                        // --- Codes d'accès ---
+                        if (etape.codes.isNotEmpty()) {
+                            CodesCard(etape.codes, context)
+                        }
+
+                        // --- App liée ---
+                        if (etape.linked_app != null) {
+                            LinkedAppCard(etape.linked_app, context)
+                        }
+
                         // --- Attachments section ---
                         if (etape.hasAttachments) {
                             AttachmentsSection(
@@ -270,6 +284,114 @@ fun EtapeDetailScreen(
                 fullScreenImageUrl = null
             },
         )
+    }
+}
+
+// ============================================================
+// Codes d'accès
+// ============================================================
+@Composable
+private fun CodesCard(codes: List<EtapeCode>, context: Context) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionTitle("Codes d'acces", Icons.Default.Key)
+            codes.forEach { code ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(RevOrange.copy(alpha = 0.06f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(code.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = RevBrown.copy(alpha = 0.6f), modifier = Modifier.width(100.dp))
+                    Text(code.value, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = RevBrown, modifier = Modifier.weight(1f))
+                    IconButton(onClick = {
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText("code", code.value))
+                        Toast.makeText(context, "Copie", Toast.LENGTH_SHORT).show()
+                    }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp), tint = RevOrange)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// App liée
+// ============================================================
+@Composable
+private fun LinkedAppCard(app: LinkedApp, context: Context) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SectionTitle("App recommandee", Icons.Default.PhoneAndroid)
+
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(32.dp), tint = Color(0xFF059669))
+                Column {
+                    Text(app.name, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = RevBrown)
+                    if (!app.notes.isNullOrBlank()) {
+                        Text(app.notes, fontSize = 12.sp, color = RevBrown.copy(alpha = 0.6f), maxLines = 3)
+                    }
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!app.app_store_url.isNullOrBlank()) {
+                    Button(
+                        onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(app.app_store_url))) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(99.dp),
+                    ) { Text("App Store", fontSize = 12.sp) }
+                }
+                if (!app.play_store_url.isNullOrBlank()) {
+                    Button(
+                        onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(app.play_store_url))) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(99.dp),
+                    ) { Text("Play Store", fontSize = 12.sp) }
+                }
+                if (!app.website_url.isNullOrBlank()) {
+                    Button(
+                        onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(app.website_url))) },
+                        colors = ButtonDefaults.buttonColors(containerColor = RevOrange),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(99.dp),
+                    ) { Text("Site web", fontSize = 12.sp) }
+                }
+            }
+
+            if (app.hasCredentials) {
+                HorizontalDivider(color = Color(0xFFA7F3D0))
+                Text("Identifiants", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = RevBrown.copy(alpha = 0.5f))
+                app.credentials.forEach { cred ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF059669).copy(alpha = 0.06f))
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(cred.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = RevBrown.copy(alpha = 0.6f), modifier = Modifier.width(110.dp))
+                        Text(cred.value, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = RevBrown, modifier = Modifier.weight(1f))
+                        IconButton(onClick = {
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            cm.setPrimaryClip(ClipData.newPlainText("cred", cred.value))
+                            Toast.makeText(context, "Copie", Toast.LENGTH_SHORT).show()
+                        }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF059669))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

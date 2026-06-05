@@ -429,6 +429,17 @@ private fun VoyageHero(etape: VoyageEtape) {
                             overlays.add(marker)
                         }
                     },
+                    // Sans ce bloc, la MapView (réutilisée par Compose) resterait
+                    // figée sur le centre initial : la carte ne suivrait pas le
+                    // changement d'étape « temps réel ». On recentre et on
+                    // repositionne le marker à chaque changement de coordonnées.
+                    update = { mapView ->
+                        val point = org.osmdroid.util.GeoPoint(lat, lng)
+                        mapView.controller.setCenter(point)
+                        (mapView.overlays.firstOrNull { it is org.osmdroid.views.overlay.Marker }
+                            as? org.osmdroid.views.overlay.Marker)?.position = point
+                        mapView.invalidate()
+                    },
                 )
             }
         }
@@ -586,7 +597,13 @@ fun VoyageDetailScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    val firstGeoEtape = etapes.firstOrNull { it.hasCoordinates }
+                    // Carte « hero » : suit la progression en temps réel — 1re étape
+                    // NON terminée avec coordonnées (= là où l'on en est), au lieu de la
+                    // toute première (souvent le vol de départ, ex. Charleroi → Vérone).
+                    // Avance d'elle-même au fil des cochages. Fallback : dernière étape
+                    // géolocalisée si tout est terminé, puis 1re étape adressable.
+                    val firstGeoEtape = etapes.firstOrNull { !it.is_completed && it.hasCoordinates }
+                        ?: etapes.lastOrNull { it.hasCoordinates }
                         ?: etapes.firstOrNull { !it.adresse.isNullOrBlank() || !it.lieu.isNullOrBlank() }
                     if (firstGeoEtape != null) {
                         VoyageHero(etape = firstGeoEtape)

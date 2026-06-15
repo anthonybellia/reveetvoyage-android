@@ -135,6 +135,12 @@ interface ApiService {
     @DELETE("passengers/{id}")
     suspend fun deletePassenger(@Path("id") id: Int): Map<String, String>
 
+    @POST("passengers/{id}/convert")
+    suspend fun convertPassenger(
+        @Path("id") id: Int,
+        @Body req: ConvertPassengerRequest,
+    ): WrappedResponse<Passenger>
+
     // Messages
     @GET("messages")
     suspend fun messages(@Query("since") since: String? = null): PaginatedResponse<Message>
@@ -230,6 +236,13 @@ interface ApiService {
     suspend fun addVoyageParticipant(
         @Path("id") voyageId: Int,
         @Body req: CreateParticipantRequest,
+    ): WrappedResponse<VoyageParticipant>
+
+    @PUT("voyages/{id}/participants/{pid}")
+    suspend fun updateVoyageParticipant(
+        @Path("id") voyageId: Int,
+        @Path("pid") participantId: Int,
+        @Body req: UpdateParticipantRequest,
     ): WrappedResponse<VoyageParticipant>
 
     @DELETE("voyages/{id}/participants/{pid}")

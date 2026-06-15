@@ -286,6 +286,7 @@ data class Passenger(
     val nom: String,
     val prenom: String,
     val full_name: String,
+    val email: String? = null,
     val date_naissance: String? = null,
     val type_doc: String? = null,
     val num_doc: String? = null,
@@ -293,6 +294,14 @@ data class Passenger(
     val notes: String? = null,
     val expiration_doc: String? = null,
     val is_default: Boolean = false,
+    val account_user_id: Int? = null,
+) {
+    val hasAccount: Boolean get() = account_user_id != null
+}
+
+@Serializable
+data class ConvertPassengerRequest(
+    val email: String,
 )
 
 @Serializable
@@ -502,6 +511,11 @@ data class SettlementResponse(
 data class CreateParticipantRequest(
     val display_name: String? = null,
     val email: String? = null,
+)
+
+@Serializable
+data class UpdateParticipantRequest(
+    val display_name: String,
 )
 
 @Serializable

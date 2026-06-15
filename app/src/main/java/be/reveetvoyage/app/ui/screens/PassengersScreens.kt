@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -77,6 +79,12 @@ class PassengersViewModel @Inject constructor(private val repo: PassengerReposit
     suspend fun delete(id: Int) {
         runCatching { repo.delete(id); _list.value = _list.value.filterNot { it.id == id } }
     }
+
+    suspend fun convert(id: Int, email: String): Boolean = runCatching {
+        val p = repo.convert(id, email)
+        _list.value = _list.value.map { if (it.id == id) p else it }
+        true
+    }.getOrDefault(false)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -160,6 +168,14 @@ fun PassengersScreen(vm: PassengersViewModel = hiltViewModel()) {
                         val ok = if (editing != null) vm.update(editing!!.id, req) else vm.create(req)
                         if (ok) showSheet = false
                     },
+                    onConvert = { email ->
+                        val e = editing
+                        if (e != null) {
+                            val ok = vm.convert(e.id, email)
+                            if (ok) showSheet = false
+                            ok
+                        } else false
+                    },
                 )
             }
         }
@@ -212,15 +228,20 @@ private fun PassengerForm(
     initial: Passenger?,
     onCancel: () -> Unit,
     onSave: suspend (PassengerRequest) -> Unit,
+    onConvert: suspend (String) -> Boolean = { false },
 ) {
-    var prenom by remember { mutableStateOf(initial?.prenom ?: "") }
-    var nom by remember { mutableStateOf(initial?.nom ?: "") }
-    var nationalite by remember { mutableStateOf(initial?.nationalite ?: "") }
-    var typeDoc by remember { mutableStateOf(initial?.type_doc ?: "") }
-    var numDoc by remember { mutableStateOf(initial?.num_doc ?: "") }
-    var notes by remember { mutableStateOf(initial?.notes ?: "") }
-    var isDefault by remember { mutableStateOf(initial?.is_default ?: false) }
+    // Clé sur initial?.id : garantit la ré-init des champs quand on passe d'un
+    // passager à un autre (sinon valeurs figées du précédent).
+    var prenom by remember(initial?.id) { mutableStateOf(initial?.prenom ?: "") }
+    var nom by remember(initial?.id) { mutableStateOf(initial?.nom ?: "") }
+    var nationalite by remember(initial?.id) { mutableStateOf(initial?.nationalite ?: "") }
+    var typeDoc by remember(initial?.id) { mutableStateOf(initial?.type_doc ?: "") }
+    var numDoc by remember(initial?.id) { mutableStateOf(initial?.num_doc ?: "") }
+    var notes by remember(initial?.id) { mutableStateOf(initial?.notes ?: "") }
+    var isDefault by remember(initial?.id) { mutableStateOf(initial?.is_default ?: false) }
     var saving by remember { mutableStateOf(false) }
+    var convertEmail by remember(initial?.id) { mutableStateOf(initial?.email ?: "") }
+    var converting by remember(initial?.id) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Column(
@@ -260,6 +281,43 @@ private fun PassengerForm(
             )
             Spacer(Modifier.width(8.dp))
             Text("Passager principal", color = RevBrown)
+        }
+
+        // Section Compte (édition uniquement)
+        if (initial != null) {
+            HorizontalDivider(color = Color(0x14000000), thickness = 0.5.dp)
+            if (initial.hasAccount) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.VerifiedUser, null, tint = RevOrange, modifier = Modifier.size(18.dp))
+                    Text("Compte lié", color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                }
+            } else {
+                Text("Convertir en compte", color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text("Crée un compte app + envoie un email pour définir le mot de passe.",
+                     color = RevTextSecondary, fontSize = 12.sp)
+                IOSTextField(
+                    value = convertEmail,
+                    onValueChange = { convertEmail = it },
+                    placeholder = "Email du passager",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                )
+                IOSButton(
+                    text = "Convertir en compte",
+                    onClick = {
+                        converting = true
+                        scope.launch {
+                            onConvert(convertEmail.trim().lowercase())
+                            converting = false
+                        }
+                    },
+                    icon = Icons.Default.PersonAddAlt,
+                    style = IOSButtonStyle.Secondary,
+                    isLoading = converting,
+                    enabled = !converting && convertEmail.contains("@") && convertEmail.contains("."),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {

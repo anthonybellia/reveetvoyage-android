@@ -154,6 +154,14 @@ class ExpensesViewModel @Inject constructor(
         }
     }
 
+    fun updateParticipant(voyageId: Int, participantId: Int, newDisplayName: String, onDone: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val ok = runCatching { repo.updateParticipant(voyageId, participantId, newDisplayName) }.isSuccess
+            if (ok) refreshInternal(voyageId)
+            onDone(ok)
+        }
+    }
+
     fun removeParticipant(voyageId: Int, participantId: Int, onDone: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             val ok = runCatching { repo.removeParticipant(voyageId, participantId) }.isSuccess

@@ -149,6 +149,8 @@ class ExpenseRepository @Inject constructor(private val api: ApiService) {
         api.addVoyageParticipant(voyageId, CreateParticipantRequest(display_name = displayName)).data
     suspend fun inviteByEmail(voyageId: Int, email: String) =
         api.addVoyageParticipant(voyageId, CreateParticipantRequest(email = email)).data
+    suspend fun updateParticipant(voyageId: Int, participantId: Int, displayName: String) =
+        api.updateVoyageParticipant(voyageId, participantId, UpdateParticipantRequest(displayName)).data
     suspend fun removeParticipant(voyageId: Int, participantId: Int) =
         api.deleteVoyageParticipant(voyageId, participantId)
 
@@ -223,6 +225,7 @@ class PassengerRepository @Inject constructor(private val api: ApiService) {
     suspend fun create(req: PassengerRequest) = api.createPassenger(req).data
     suspend fun update(id: Int, req: PassengerRequest) = api.updatePassenger(id, req).data
     suspend fun delete(id: Int) = api.deletePassenger(id)
+    suspend fun convert(id: Int, email: String) = api.convertPassenger(id, ConvertPassengerRequest(email)).data
 }
 
 @Singleton

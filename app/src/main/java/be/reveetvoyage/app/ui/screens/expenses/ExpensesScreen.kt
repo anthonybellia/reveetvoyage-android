@@ -101,6 +101,7 @@ fun ExpensesScreen(
     var actionSheetExpense by remember { mutableStateOf<VoyageExpense?>(null) }
     var pendingDelete by remember { mutableStateOf<VoyageExpense?>(null) }
     var pendingRemoveParticipant by remember { mutableStateOf<VoyageParticipant?>(null) }
+    var editingParticipant by remember { mutableStateOf<VoyageParticipant?>(null) }
     var showAddGuestDialog by remember { mutableStateOf(false) }
     var showInviteEmailDialog by remember { mutableStateOf(false) }
 
@@ -175,6 +176,7 @@ fun ExpensesScreen(
                         participants = participants,
                         isLoading = isLoading,
                         onRemove = { pendingRemoveParticipant = it },
+                        onEdit = { editingParticipant = it },
                         onAddGuest = { showAddGuestDialog = true },
                         onInviteEmail = { showInviteEmailDialog = true },
                     )
@@ -317,6 +319,20 @@ fun ExpensesScreen(
                 showInviteEmailDialog = false
             },
             onDismiss = { showInviteEmailDialog = false },
+        )
+    }
+
+    editingParticipant?.let { p ->
+        TextInputDialog(
+            title = "Renommer",
+            placeholder = "Nom du participant",
+            confirmText = "Enregistrer",
+            initialValue = p.display_name,
+            onConfirm = { name ->
+                if (name.isNotBlank()) vm.updateParticipant(voyageId, p.id, name.trim())
+                editingParticipant = null
+            },
+            onDismiss = { editingParticipant = null },
         )
     }
 }
@@ -631,6 +647,7 @@ private fun ParticipantsTabContent(
     participants: List<VoyageParticipant>,
     isLoading: Boolean,
     onRemove: (VoyageParticipant) -> Unit,
+    onEdit: (VoyageParticipant) -> Unit,
     onAddGuest: () -> Unit,
     onInviteEmail: () -> Unit,
 ) {
@@ -660,7 +677,7 @@ private fun ParticipantsTabContent(
                 Column {
                     participants.forEachIndexed { i, p ->
                         if (i > 0) HorizontalDivider(color = Color(0x14000000), thickness = 0.5.dp)
-                        ParticipantRow(p, onRemove = { onRemove(p) })
+                        ParticipantRow(p, onEdit = { onEdit(p) }, onRemove = { onRemove(p) })
                     }
                 }
             }
@@ -684,7 +701,7 @@ private fun ParticipantsTabContent(
 }
 
 @Composable
-private fun ParticipantRow(p: VoyageParticipant, onRemove: () -> Unit) {
+private fun ParticipantRow(p: VoyageParticipant, onEdit: () -> Unit, onRemove: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -703,6 +720,9 @@ private fun ParticipantRow(p: VoyageParticipant, onRemove: () -> Unit) {
                 StatusBadge("Invité", BadgeKind.Neutral)
             }
         }
+        IconButton(onClick = onEdit) {
+            Icon(Icons.Default.Edit, null, tint = RevOrange, modifier = Modifier.size(20.dp))
+        }
         IconButton(onClick = onRemove) {
             Icon(Icons.Default.DeleteOutline, null, tint = RevRed, modifier = Modifier.size(20.dp))
         }
@@ -718,10 +738,11 @@ private fun TextInputDialog(
     placeholder: String,
     confirmText: String,
     isEmail: Boolean = false,
+    initialValue: String = "",
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var value by remember { mutableStateOf("") }
+    var value by remember { mutableStateOf(initialValue) }
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),

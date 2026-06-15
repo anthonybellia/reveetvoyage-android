@@ -295,8 +295,10 @@ data class Passenger(
     val expiration_doc: String? = null,
     val is_default: Boolean = false,
     val account_user_id: Int? = null,
+    val is_me: Boolean? = null,
 ) {
     val hasAccount: Boolean get() = account_user_id != null
+    val isMe: Boolean get() = is_me == true
 }
 
 @Serializable

@@ -207,6 +207,16 @@ private fun PassengerCard(p: Passenger, onTap: () -> Unit, onDelete: () -> Unit)
                 Row(verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(p.full_name, color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    if (p.isMe) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Brush.horizontalGradient(listOf(RevOrange, RevRed)))
+                                .padding(horizontal = 6.dp, vertical = 1.dp),
+                        ) {
+                            Text("Moi", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                        }
+                    }
                     if (p.is_default) {
                         Icon(Icons.Default.Star, null, tint = RevYellow, modifier = Modifier.size(14.dp))
                     }
@@ -286,7 +296,13 @@ private fun PassengerForm(
         // Section Compte (édition uniquement)
         if (initial != null) {
             HorizontalDivider(color = Color(0x14000000), thickness = 0.5.dp)
-            if (initial.hasAccount) {
+            if (initial.isMe) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.AccountCircle, null, tint = RevOrange, modifier = Modifier.size(18.dp))
+                    Text("C'est toi — relié à ton compte", color = RevBrown, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                }
+            } else if (initial.hasAccount) {
                 Row(verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Default.VerifiedUser, null, tint = RevOrange, modifier = Modifier.size(18.dp))
